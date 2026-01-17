@@ -22,19 +22,16 @@ class QuizListScreen extends StatelessWidget {
             .orderBy('startAt')
             .snapshots(),
         builder: (context, snapshot) {
-          // ⏳ Loading
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // ❌ Error
           if (snapshot.hasError) {
             return const Center(child: Text("Failed to load quizzes"));
           }
 
           final docs = snapshot.data?.docs ?? [];
 
-          // 📭 Empty
           if (docs.isEmpty) {
             return const Center(
               child: Text(
@@ -53,15 +50,12 @@ class QuizListScreen extends StatelessWidget {
               final data = doc.data();
 
               final String title = data['title'] ?? 'Quiz';
-              final String type = data['type'] ?? 'public';
-              final bool isPrivate = type == 'private';
+              final bool isPrivate = data['type'] == 'private';
 
               final DateTime startAt =
                   (data['startAt'] as Timestamp).toDate();
               final DateTime endAt =
                   (data['endAt'] as Timestamp).toDate();
-              final int durationMinutes =
-                  (data['durationMinutes'] as num).toInt();
 
               final DateTime now = DateTime.now();
 
@@ -140,28 +134,30 @@ class QuizListScreen extends StatelessWidget {
                     }
 
                     // ⏳ QUIZ NOT STARTED → RULES
-                    if (now.isBefore(startAt)) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => QuizRulesScreen(
-                            startAt: startAt,
-                            onConfirmedStart: () {
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => QuizAttemptScreen(
-                                    quizId: doc.id,
-                                    durationMinutes: durationMinutes,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      );
-                      return;
-                    }
+                    // ⏳ QUIZ NOT STARTED → RULES
+if (now.isBefore(startAt)) {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => QuizRulesScreen(
+        startAt: startAt,
+        onConfirmedStart: () {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => QuizAttemptScreen(
+                quizId: doc.id,
+                endAt: endAt,
+              ),
+            ),
+          );
+        },
+      ),
+    ),
+  );
+  return;
+}
+
 
                     // ✅ QUIZ LIVE → START
                     Navigator.push(
@@ -169,7 +165,7 @@ class QuizListScreen extends StatelessWidget {
                       MaterialPageRoute(
                         builder: (_) => QuizAttemptScreen(
                           quizId: doc.id,
-                          durationMinutes: durationMinutes,
+                          endAt: endAt,
                         ),
                       ),
                     );

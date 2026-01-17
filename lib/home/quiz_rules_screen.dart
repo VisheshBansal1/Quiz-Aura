@@ -36,44 +36,34 @@ class _QuizRulesScreenState extends State<QuizRulesScreen> {
   }
 
   void _updateRemaining() {
-    final now = DateTime.now();
-    final diff = widget.startAt.difference(now);
-
-    if (diff.isNegative || diff == Duration.zero) {
+    final diff = widget.startAt.difference(DateTime.now());
+    if (diff.isNegative) {
       _timer?.cancel();
-      if (mounted) {
-        setState(() => remaining = Duration.zero);
-      }
+      setState(() => remaining = Duration.zero);
     } else {
-      if (mounted) {
-        setState(() => remaining = diff);
-      }
+      setState(() => remaining = diff);
     }
   }
 
   String _format(Duration d) {
-    final h = d.inHours;
     final m = d.inMinutes.remainder(60);
     final s = d.inSeconds.remainder(60);
-
-    if (h > 0) return "${h}h ${m}m ${s}s";
     return "${m}m ${s}s";
   }
 
   Future<void> _confirmAndStart() async {
     if (_starting) return;
 
-    final confirmed = await showDialog<bool>(
+    final ok = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
         title: const Text("Start Quiz"),
         content: const Text(
-          "Once you start:\n\n"
+          "• Timer will start immediately\n"
           "• You cannot go back\n"
-          "• Timer starts immediately\n"
           "• Leaving app may submit quiz\n\n"
-          "Do you want to continue?",
+          "Continue?",
         ),
         actions: [
           TextButton(
@@ -88,10 +78,8 @@ class _QuizRulesScreenState extends State<QuizRulesScreen> {
       ),
     );
 
-    if (confirmed == true && mounted) {
+    if (ok == true && mounted) {
       setState(() => _starting = true);
-
-      // 🔥 THIS IS THE FIX
       Navigator.pop(context); // remove rules screen
       widget.onConfirmedStart(); // start quiz
     }
@@ -118,16 +106,12 @@ class _QuizRulesScreenState extends State<QuizRulesScreen> {
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
-
-              const Text("• No back navigation during quiz"),
-              const Text("• Timer-based quiz"),
-              const Text("• Auto submit when time ends"),
-              const Text("• Leaving app may submit quiz"),
-
+              const Text("• No back navigation"),
+              const Text("• Timer based quiz"),
+              const Text("• Auto submit on timeout"),
               const SizedBox(height: 24),
               const Divider(),
               const SizedBox(height: 16),
-
               Center(
                 child: Column(
                   children: [
@@ -147,9 +131,7 @@ class _QuizRulesScreenState extends State<QuizRulesScreen> {
                   ],
                 ),
               ),
-
               const Spacer(),
-
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(

@@ -3,6 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
+import 'quiz_result_screen.dart';
+import 'quiz_result_locked_screen.dart';
+
 class HistoryScreen extends StatelessWidget {
   const HistoryScreen({super.key});
 
@@ -11,9 +14,7 @@ class HistoryScreen extends StatelessWidget {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
-      return const Center(
-        child: Text("Please login to see your history"),
-      );
+      return const Center(child: Text("Please login"));
     }
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -22,31 +23,21 @@ class HistoryScreen extends StatelessWidget {
           .doc(user.uid)
           .collection('attempts')
           .orderBy('attemptedAt', descending: true)
-          .limit(50) // 🔒 prevents performance issues
+          .limit(50)
           .snapshots(),
       builder: (context, snapshot) {
-        // Loading
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        // Error
         if (snapshot.hasError) {
-          return const Center(
-            child: Text("Failed to load history"),
-          );
+          return const Center(child: Text("Failed to load history"));
         }
 
         final docs = snapshot.data?.docs ?? [];
 
-        // Empty state
         if (docs.isEmpty) {
-          return const Center(
-            child: Text(
-              "No quiz attempts yet",
-              style: TextStyle(fontSize: 16),
-            ),
-          );
+          return const Center(child: Text("No quiz attempts yet"));
         }
 
         return ListView.separated(
@@ -56,10 +47,10 @@ class HistoryScreen extends StatelessWidget {
           itemBuilder: (context, i) {
             final data = docs[i].data();
 
-            final title = data['quizTitle'] ?? 'Quiz';
-            final score = data['score'] ?? 0;
-            final total = data['total'] ?? 0;
-            final percentage = data['percentage'] ?? 0;
+            final quizId = data['quizId'];
+            final score = data['score'];
+            final total = data['total'];
+            final percentage = data['percentage'];
 
             final ts = data['attemptedAt'] as Timestamp?;
             final date = ts != null
@@ -68,36 +59,59 @@ class HistoryScreen extends StatelessWidget {
                 : '';
 
             return Card(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
               child: ListTile(
-                title: Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                title: Text("Score: $score / $total"),
+                subtitle: Text(date),
+                trailing: Text(
+                  "$percentage%",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
                 ),
-                subtitle: Text("Score: $score / $total"),
-                trailing: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      "$percentage%",
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                onTap: () async {
+                  // 🔥 FETCH QUIZ DATA
+                  final quizSnap = await FirebaseFirestore.instance
+                      .collection('quizzes')
+                      .doc(quizId)
+                      .get();
+
+                  if (!quizSnap.exists) return;
+
+                  final quiz = quizSnap.data()!;
+                  final endAt =
+                      (quiz['endAt'] as Timestamp).toDate();
+
+                  final now = DateTime.now();
+
+                  // ⛔ QUIZ STILL RUNNING
+                  if (now.isBefore(endAt)) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            QuizResultLockedScreen(endAt: endAt),
+                      ),
+                    );
+                    return;
+                  }
+
+                  // ✅ QUIZ ENDED → SHOW RESULT
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => QuizResultScreen(
+                        quizId: quizId,
+                        score: score,
+                        total: total,
+                        percentage: percentage,
+                        answers: const {},
+                        questions: const [],
+                        endAt: endAt,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      date,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
             );
           },

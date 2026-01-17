@@ -23,7 +23,7 @@ class _JoinQuizScreenState extends State<JoinQuizScreen> {
   }
 
   Future<void> _joinQuiz() async {
-    FocusScope.of(context).unfocus(); // 🔹 hide keyboard
+    FocusScope.of(context).unfocus();
 
     if (loading) return;
 
@@ -55,10 +55,7 @@ class _JoinQuizScreenState extends State<JoinQuizScreen> {
       final data = doc.data();
       final quizId = doc.id;
 
-      // 🔒 Validate timing fields
-      if (data['startAt'] == null ||
-          data['endAt'] == null ||
-          data['durationMinutes'] == null) {
+      if (data['startAt'] == null || data['endAt'] == null) {
         _error("Quiz timing not configured");
         return;
       }
@@ -66,7 +63,6 @@ class _JoinQuizScreenState extends State<JoinQuizScreen> {
       final DateTime now = DateTime.now();
       final DateTime startAt = (data['startAt'] as Timestamp).toDate();
       final DateTime endAt = (data['endAt'] as Timestamp).toDate();
-      final int durationMinutes = data['durationMinutes'] as int;
 
       // ⛔ QUIZ ENDED
       if (now.isAfter(endAt)) {
@@ -90,38 +86,33 @@ class _JoinQuizScreenState extends State<JoinQuizScreen> {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => QuizAttemptScreen(
-                      quizId: quizId,
-                      durationMinutes: durationMinutes,
-                    ),
+                    builder: (_) =>
+                        QuizAttemptScreen(quizId: quizId, endAt: endAt),
                   ),
                 );
               },
             ),
           ),
         );
+        return; // 🔒 CRITICAL
       }
 
-      // ✅ QUIZ RUNNING
+      // ✅ QUIZ LIVE → DIRECT START
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => QuizAttemptScreen(
-            quizId: quizId,
-            durationMinutes: durationMinutes,
-          ),
+          builder: (_) => QuizAttemptScreen(quizId: quizId, endAt: endAt),
         ),
       );
     } catch (e) {
       _error("Failed to join quiz");
     } finally {
-      if (mounted) {
-        setState(() => loading = false);
-      }
+      if (mounted) setState(() => loading = false);
     }
   }
 
   void _error(String msg) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
@@ -142,9 +133,9 @@ class _JoinQuizScreenState extends State<JoinQuizScreen> {
 
             TextField(
               controller: codeCtrl,
-              textCapitalization: TextCapitalization.characters,
               maxLength: 6,
               enabled: !loading,
+              textCapitalization: TextCapitalization.characters,
               decoration: const InputDecoration(
                 labelText: "Join Code",
                 hintText: "ABC123",

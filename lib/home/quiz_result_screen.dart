@@ -10,6 +10,7 @@ class QuizResultScreen extends StatelessWidget {
   final int percentage;
   final Map<int, int> answers;
   final List<QueryDocumentSnapshot<Map<String, dynamic>>> questions;
+  final DateTime endAt; // 🔥 REQUIRED
 
   const QuizResultScreen({
     super.key,
@@ -19,14 +20,16 @@ class QuizResultScreen extends StatelessWidget {
     required this.percentage,
     required this.answers,
     required this.questions,
+    required this.endAt,
   });
 
   @override
   Widget build(BuildContext context) {
     final passed = percentage >= 60;
+    final bool quizEnded = DateTime.now().isAfter(endAt);
 
     return WillPopScope(
-      onWillPop: () async => false, // 🔒 block back
+      onWillPop: () async => false, // 🔒 block system back
       child: Scaffold(
         appBar: AppBar(
           title: const Text("Quiz Result"),
@@ -73,22 +76,29 @@ class QuizResultScreen extends StatelessWidget {
 
               const SizedBox(height: 32),
 
+              // ================= ANSWER REVIEW =================
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.visibility),
-                  label: const Text("Review Answers"),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => AnswerReviewScreen(
-                          questions: questions,
-                          answers: answers,
-                        ),
-                      ),
-                    );
-                  },
+                  label: Text(
+                    quizEnded
+                        ? "Review Answers"
+                        : "Review available after quiz ends",
+                  ),
+                  onPressed: quizEnded
+                      ? () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => AnswerReviewScreen(
+                                questions: questions,
+                                answers: answers,
+                              ),
+                            ),
+                          );
+                        }
+                      : null, // 🔒 BLOCK EARLY REVIEW
                 ),
               ),
 
