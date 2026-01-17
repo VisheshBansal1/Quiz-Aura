@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "296193820246",
+    "project_id": "quiz-sphere-3ec4d",
+    "storage_bucket": "quiz-sphere-3ec4d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:296193820246:android:b026b4f3edd417126b1df7",
+        "android_client_info": {
+          "package_name": "com.example.quiz_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBFBxF2dLRrx4qKiYnKxQ9ZEKOuOIfQCL0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
