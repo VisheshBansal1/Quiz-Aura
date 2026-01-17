@@ -6,7 +6,13 @@ import 'package:quiz_app/home/quiz_result_screen.dart';
 
 class QuizAttemptScreen extends StatefulWidget {
   final String quizId;
-  const QuizAttemptScreen({super.key, required this.quizId});
+  final int durationMinutes;
+
+  const QuizAttemptScreen({
+    super.key,
+    required this.quizId,
+    required this.durationMinutes,
+  });
 
   @override
   State<QuizAttemptScreen> createState() => _QuizAttemptScreenState();
@@ -18,20 +24,17 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
 
   bool submitting = false;
 
-  // ⏱ TIMER
-  static const int totalSeconds = 300; // 5 min
-  int remainingSeconds = totalSeconds;
+  late int remainingSeconds;
   Timer? _timer;
 
-  late Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
-  _questionsFuture;
-  List<QueryDocumentSnapshot<Map<String, dynamic>>> _questionsCache = [];
+  late Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _questionsFuture;
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _questions = [];
 
   @override
   void initState() {
     super.initState();
+    remainingSeconds = widget.durationMinutes * 60;
     _questionsFuture = _loadQuestions();
-    _startTimer();
   }
 
   @override
@@ -41,8 +44,7 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
   }
 
   // ---------------- LOAD QUESTIONS ----------------
-  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
-  _loadQuestions() async {
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _loadQuestions() async {
     final snap = await FirebaseFirestore.instance
         .collection('quizzes')
         .doc(widget.quizId)
@@ -54,18 +56,21 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
       throw Exception("No questions found");
     }
 
-    _questionsCache = snap.docs;
+    _questions = snap.docs;
+    _startTimer(); // ✅ start only after questions load
     return snap.docs;
   }
 
   // ---------------- TIMER ----------------
   void _startTimer() {
-    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+    _timer?.cancel();
+
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+
       if (remainingSeconds <= 0) {
-        t.cancel();
-        if (!submitting) {
-          _submitQuiz();
-        }
+        timer.cancel();
+        _submitQuiz(auto: true);
       } else {
         setState(() => remainingSeconds--);
       }
@@ -91,8 +96,7 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
             return const Center(child: Text("Failed to load quiz"));
           }
 
-          final questions = snapshot.data!;
-          final q = questions[currentIndex].data();
+          final q = _questions[currentIndex].data();
           final options = List<String>.from(q['options']);
 
           return Padding(
@@ -103,17 +107,20 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
                 // ⏱ TIMER
                 Text(
                   "Time left: ${remainingSeconds ~/ 60}:${(remainingSeconds % 60).toString().padLeft(2, '0')}",
-                  style: const TextStyle(color: Colors.red),
+                  style: const TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 8),
 
                 LinearProgressIndicator(
-                  value: (currentIndex + 1) / questions.length,
+                  value: (currentIndex + 1) / _questions.length,
                 ),
                 const SizedBox(height: 12),
 
                 Text(
-                  "Question ${currentIndex + 1} of ${questions.length}",
+                  "Question ${currentIndex + 1} of ${_questions.length}",
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 16),
@@ -167,14 +174,14 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
                                   return;
                                 }
 
-                                if (currentIndex == questions.length - 1) {
+                                if (currentIndex == _questions.length - 1) {
                                   _submitQuiz();
                                 } else {
                                   setState(() => currentIndex++);
                                 }
                               },
                         child: Text(
-                          currentIndex == questions.length - 1
+                          currentIndex == _questions.length - 1
                               ? "Submit"
                               : "Next",
                         ),
@@ -191,32 +198,38 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
   }
 
   // ---------------- SUBMIT QUIZ ----------------
-Future<void> _submitQuiz() async {
+Future<void> _submitQuiz({bool auto = false}) async {
+  // 🔒 Hard lock
   if (submitting) return;
+
+  // ❌ No questions loaded → block submit
+  if (_questions.isEmpty) {
+    _error("Quiz data not ready");
+    return;
+  }
 
   setState(() => submitting = true);
   _timer?.cancel();
 
-  int score = 0;
-
-  for (int i = 0; i < _questionsCache.length; i++) {
-    final correctIndex = _questionsCache[i]['correctIndex'] as int?;
-    if (correctIndex != null && answers[i] == correctIndex) {
-      score++;
-    }
-  }
-
-  final user = FirebaseAuth.instance.currentUser;
-  if (user == null) {
-    _error("User not logged in");
-    setState(() => submitting = false);
-    return;
-  }
-
-  final int total = _questionsCache.length;
-  final int percentage = ((score / total) * 100).round();
-
   try {
+    int score = 0;
+
+    for (int i = 0; i < _questions.length; i++) {
+      final correctIndex = _questions[i]['correctIndex'] as int?;
+      if (correctIndex != null && answers[i] == correctIndex) {
+        score++;
+      }
+    }
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw Exception("User not logged in");
+    }
+
+    final int total = _questions.length;
+    final int percentage = ((score / total) * 100).round();
+
+    // ✅ SAVE ATTEMPT
     await FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
@@ -227,30 +240,36 @@ Future<void> _submitQuiz() async {
       'total': total,
       'percentage': percentage,
       'attemptedAt': FieldValue.serverTimestamp(),
+      'autoSubmitted': auto,
     });
-  } catch (e) {
-    _error("Failed to save result");
-    setState(() => submitting = false);
-    return;
-  }
 
-  if (!mounted) return;
+    if (!mounted) return;
 
-  Navigator.of(context).pushReplacement(
-    MaterialPageRoute(
-      builder: (_) => QuizResultScreen(
-        quizId: widget.quizId,
-        score: score,
-        total: total,
-        percentage: percentage,
-        answers: answers,
-        questions: _questionsCache,
+    // ✅ NAVIGATE TO RESULT
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => QuizResultScreen(
+          quizId: widget.quizId,
+          score: score,
+          total: total,
+          percentage: percentage,
+          answers: Map<int, int>.from(answers),
+          questions: List.from(_questions),
+        ),
       ),
-    ),
-  );
+    );
+  } catch (e) {
+    // 🔥 IMPORTANT: unlock submit on failure
+    if (mounted) {
+      _error(e.toString().replaceFirst('Exception: ', ''));
+      setState(() => submitting = false);
+    }
+  }
 }
 
   void _error(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
   }
 }

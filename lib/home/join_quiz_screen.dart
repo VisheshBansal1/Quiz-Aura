@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'quiz_attempt_screen.dart';
+import 'quiz_rules_screen.dart';
+import 'quiz_ended_screen.dart';
 
 class JoinQuizScreen extends StatefulWidget {
   const JoinQuizScreen({super.key});
@@ -21,6 +23,10 @@ class _JoinQuizScreenState extends State<JoinQuizScreen> {
   }
 
   Future<void> _joinQuiz() async {
+    FocusScope.of(context).unfocus(); // 🔹 hide keyboard
+
+    if (loading) return;
+
     final code = codeCtrl.text.trim().toUpperCase();
 
     if (code.length != 6) {
@@ -45,24 +51,78 @@ class _JoinQuizScreenState extends State<JoinQuizScreen> {
         return;
       }
 
-      final quizId = snap.docs.first.id;
+      final doc = snap.docs.first;
+      final data = doc.data();
+      final quizId = doc.id;
 
+      // 🔒 Validate timing fields
+      if (data['startAt'] == null ||
+          data['endAt'] == null ||
+          data['durationMinutes'] == null) {
+        _error("Quiz timing not configured");
+        return;
+      }
+
+      final DateTime now = DateTime.now();
+      final DateTime startAt = (data['startAt'] as Timestamp).toDate();
+      final DateTime endAt = (data['endAt'] as Timestamp).toDate();
+      final int durationMinutes = data['durationMinutes'] as int;
+
+      // ⛔ QUIZ ENDED
+      if (now.isAfter(endAt)) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => QuizEndedScreen(quizTitle: data['title'] ?? "Quiz"),
+          ),
+        );
+        return;
+      }
+
+      // ⏳ QUIZ NOT STARTED → RULES SCREEN
+      if (now.isBefore(startAt)) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => QuizRulesScreen(
+              startAt: startAt,
+              onConfirmedStart: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => QuizAttemptScreen(
+                      quizId: quizId,
+                      durationMinutes: durationMinutes,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      }
+
+      // ✅ QUIZ RUNNING
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => QuizAttemptScreen(quizId: quizId),
+          builder: (_) => QuizAttemptScreen(
+            quizId: quizId,
+            durationMinutes: durationMinutes,
+          ),
         ),
       );
     } catch (e) {
       _error("Failed to join quiz");
     } finally {
-      if (mounted) setState(() => loading = false);
+      if (mounted) {
+        setState(() => loading = false);
+      }
     }
   }
 
   void _error(String msg) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
@@ -76,10 +136,7 @@ class _JoinQuizScreenState extends State<JoinQuizScreen> {
           children: [
             const Text(
               "Enter Join Code",
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
 
@@ -87,6 +144,7 @@ class _JoinQuizScreenState extends State<JoinQuizScreen> {
               controller: codeCtrl,
               textCapitalization: TextCapitalization.characters,
               maxLength: 6,
+              enabled: !loading,
               decoration: const InputDecoration(
                 labelText: "Join Code",
                 hintText: "ABC123",

@@ -24,6 +24,9 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
   bool isPrivate = false;
   bool showCreateTopic = false;
 
+  DateTime? startTime;
+  int durationMinutes = 30;
+
   String? quizId;
   String? joinCode;
 
@@ -39,13 +42,10 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
   // ---------------- CREATE TOPIC ----------------
   Future<void> _createTopic() async {
     final name = topicCtrl.text.trim();
-
     if (name.isEmpty) {
       _error("Topic name required");
       return;
     }
-
-    setState(() => loading = true);
 
     try {
       await FirebaseFirestore.instance.collection('topics').add({
@@ -54,17 +54,13 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      if (!mounted) return;
-
       setState(() {
         selectedTopic = name;
         showCreateTopic = false;
         topicCtrl.clear();
       });
-    } catch (_) {
+    } catch (e) {
       _error("Failed to create topic");
-    } finally {
-      if (mounted) setState(() => loading = false);
     }
   }
 
@@ -79,23 +75,32 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
       return;
     }
 
+    if (startTime == null) {
+      _error("Please select quiz start time");
+      return;
+    }
+
     setState(() => loading = true);
 
     try {
+      final endTime =
+          startTime!.add(Duration(minutes: durationMinutes));
+
       final result = await service.createQuiz(
         title: titleCtrl.text.trim(),
         topic: selectedTopic!,
         isPrivate: isPrivate,
+        startAt: startTime!,
+        endAt: endTime,
+        durationMinutes: durationMinutes,
       );
-
-      if (!mounted) return;
 
       setState(() {
         quizId = result['quizId'];
         joinCode = result['joinCode'];
       });
     } catch (e) {
-      _error(e.toString().replaceFirst('Exception: ', ''));
+      _error(e.toString().replaceFirst("Exception: ", ""));
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -120,7 +125,7 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // ---------------- QUIZ CARD ----------------
+                  // ---------------- QUIZ INFO ----------------
                   Card(
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -129,6 +134,7 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         children: [
+                          // TITLE
                           TextFormField(
                             controller: titleCtrl,
                             enabled: quizId == null,
@@ -143,6 +149,7 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
 
                           const SizedBox(height: 16),
 
+                          // ---------------- TOPIC ----------------
                           if (quizId == null)
                             StreamBuilder<
                                 QuerySnapshot<Map<String, dynamic>>>(
@@ -151,33 +158,31 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
                                   .where('isActive', isEqualTo: true)
                                   .snapshots(),
                               builder: (context, snapshot) {
-                                if (snapshot.connectionState ==
-                                    ConnectionState.waiting) {
+                                if (!snapshot.hasData) {
                                   return const CircularProgressIndicator();
                                 }
 
-                                final docs = snapshot.data?.docs ?? [];
+                                final docs = snapshot.data!.docs;
                                 final topics = docs
                                     .map((d) =>
                                         d.data()['title'] as String)
                                     .toList();
 
-                                // NO TOPICS OR CREATE MODE
                                 if (topics.isEmpty || showCreateTopic) {
                                   return Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
                                     children: [
                                       TextFormField(
                                         controller: topicCtrl,
-                                        decoration: const InputDecoration(
-                                          labelText: "New Topic Name",
+                                        decoration:
+                                            const InputDecoration(
+                                          labelText: "New Topic",
                                         ),
                                       ),
                                       const SizedBox(height: 8),
                                       ElevatedButton(
                                         onPressed: _createTopic,
-                                        child: const Text("Create Topic"),
+                                        child:
+                                            const Text("Create Topic"),
                                       ),
                                     ],
                                   );
@@ -193,23 +198,23 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
                                           const Text("Select Topic"),
                                       items: topics
                                           .map(
-                                            (t) =>
-                                                DropdownMenuItem(
+                                            (t) => DropdownMenuItem(
                                               value: t,
                                               child: Text(t),
                                             ),
                                           )
                                           .toList(),
-                                      onChanged: (v) => setState(
-                                          () => selectedTopic = v),
+                                      onChanged: (v) =>
+                                          setState(() =>
+                                              selectedTopic = v),
                                       validator: (v) =>
                                           v == null
                                               ? "Select a topic"
                                               : null,
                                     ),
                                     TextButton(
-                                      onPressed: () => setState(
-                                          () => showCreateTopic = true),
+                                      onPressed: () => setState(() =>
+                                          showCreateTopic = true),
                                       child: const Text(
                                           "+ Create new topic"),
                                     ),
@@ -218,16 +223,90 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
                               },
                             ),
 
+                          const SizedBox(height: 16),
+
+                          // ---------------- START TIME ----------------
+                          ListTile(
+                            title: Text(
+                              startTime == null
+                                  ? "Select Quiz Start Time"
+                                  : "Starts at: ${startTime!.toLocal()}",
+                            ),
+                            trailing:
+                                const Icon(Icons.schedule),
+                            onTap: quizId == null
+                                ? () async {
+                                    final now = DateTime.now();
+
+                                    final date =
+                                        await showDatePicker(
+                                      context: context,
+                                      initialDate: now,
+                                      firstDate: now,
+                                      lastDate:
+                                          now.add(const Duration(days: 30)),
+                                    );
+                                    if (date == null) return;
+
+                                    final time =
+                                        await showTimePicker(
+                                      context: context,
+                                      initialTime:
+                                          TimeOfDay.now(),
+                                    );
+                                    if (time == null) return;
+
+                                    setState(() {
+                                      startTime = DateTime(
+                                        date.year,
+                                        date.month,
+                                        date.day,
+                                        time.hour,
+                                        time.minute,
+                                      );
+                                    });
+                                  }
+                                : null,
+                          ),
+
                           const SizedBox(height: 12),
 
+                          // ---------------- DURATION ----------------
+                          TextFormField(
+                            initialValue: "30",
+                            keyboardType:
+                                TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText:
+                                  "Duration (minutes)",
+                            ),
+                            validator: (v) {
+                              final m =
+                                  int.tryParse(v ?? "");
+                              if (m == null || m < 1) {
+                                return "Invalid duration";
+                              }
+                              return null;
+                            },
+                            onChanged: (v) {
+                              durationMinutes =
+                                  int.tryParse(v) ?? 30;
+                            },
+                          ),
+
+                          const SizedBox(height: 12),
+
+                          // ---------------- PRIVATE ----------------
                           SwitchListTile(
-                            title: const Text("Private Quiz"),
+                            title:
+                                const Text("Private Quiz"),
                             subtitle: const Text(
-                                "Private quizzes require join code"),
+                                "Requires join code"),
                             value: isPrivate,
                             onChanged: quizId == null
                                 ? (v) =>
-                                    setState(() => isPrivate = v)
+                                    setState(() =>
+                                        isPrivate = v)
                                 : null,
                           ),
                         ],
@@ -237,32 +316,38 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
 
                   const SizedBox(height: 24),
 
-                  // ---------------- CREATE BUTTON ----------------
+                  // ---------------- CREATE ----------------
                   ElevatedButton(
-                    onPressed: quizId == null ? _createQuiz : null,
+                    onPressed: quizId == null
+                        ? _createQuiz
+                        : null,
                     child: const Text("Create Quiz"),
                   ),
 
-                  // ---------------- POST CREATION ----------------
+                  // ---------------- AFTER CREATE ----------------
                   if (quizId != null) ...[
                     const SizedBox(height: 32),
 
                     if (joinCode != null)
                       Card(
                         child: Padding(
-                          padding: const EdgeInsets.all(16),
+                          padding:
+                              const EdgeInsets.all(16),
                           child: Column(
                             children: [
-                              const Text("JOIN CODE",
-                                  style: TextStyle(
-                                      fontWeight:
-                                          FontWeight.bold)),
+                              const Text(
+                                "JOIN CODE",
+                                style: TextStyle(
+                                    fontWeight:
+                                        FontWeight.bold),
+                              ),
                               const SizedBox(height: 8),
                               SelectableText(
                                 joinCode!,
                                 style: const TextStyle(
                                   fontSize: 28,
-                                  fontWeight: FontWeight.bold,
+                                  fontWeight:
+                                      FontWeight.bold,
                                   letterSpacing: 2,
                                 ),
                               ),
@@ -275,13 +360,15 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
 
                     ElevatedButton.icon(
                       icon: const Icon(Icons.add),
-                      label: const Text("Add Questions"),
+                      label:
+                          const Text("Add Questions"),
                       onPressed: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) =>
-                                AddQuestionScreen(quizId: quizId!),
+                                AddQuestionScreen(
+                                    quizId: quizId!),
                           ),
                         );
                       },
@@ -290,7 +377,8 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
                     const SizedBox(height: 12),
 
                     OutlinedButton.icon(
-                      icon: const Icon(Icons.auto_awesome),
+                      icon:
+                          const Icon(Icons.auto_awesome),
                       label:
                           const Text("Generate with AI"),
                       onPressed: () {

@@ -7,7 +7,9 @@ class AdminQuizService {
 
   static const String _chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-  /// 🔐 Generate unique 6-char join code
+  // --------------------------------------------------
+  // 🔐 Generate unique 6-char join code
+  // --------------------------------------------------
   Future<String> _generateJoinCode() async {
     for (int i = 0; i < 5; i++) {
       final code = List.generate(
@@ -15,25 +17,31 @@ class AdminQuizService {
         (_) => _chars[Random.secure().nextInt(_chars.length)],
       ).join();
 
-      final exists = await _db
+      final snap = await _db
           .collection('quizzes')
           .where('joinCode', isEqualTo: code)
           .limit(1)
           .get();
 
-      if (exists.docs.isEmpty) {
+      if (snap.docs.isEmpty) {
         return code;
       }
     }
-
     throw Exception("Failed to generate join code");
   }
 
-  /// 🧠 Create quiz (PUBLIC or PRIVATE)
+  // --------------------------------------------------
+  // 🧠 CREATE QUIZ (PUBLIC / PRIVATE + TIMING)
+  // --------------------------------------------------
   Future<Map<String, String?>> createQuiz({
     required String title,
     required String topic,
     required bool isPrivate,
+
+    // 🔥 NEW (MANDATORY)
+    required DateTime startAt,
+    required DateTime endAt,
+    required int durationMinutes,
   }) async {
     final cleanTitle = title.trim();
     final cleanTopic = topic.trim();
@@ -44,13 +52,16 @@ class AdminQuizService {
     if (cleanTopic.isEmpty) {
       throw Exception("Topic required");
     }
+    if (endAt.isBefore(startAt)) {
+      throw Exception("End time must be after start time");
+    }
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       throw Exception("User not authenticated");
     }
 
-    // 🔒 Prevent duplicate quiz by same user in same topic
+    // 🔒 Prevent duplicate quiz by same user
     final duplicateCheck = await _db
         .collection('quizzes')
         .where('createdBy', isEqualTo: user.uid)
@@ -63,30 +74,39 @@ class AdminQuizService {
       throw Exception("You already created this quiz");
     }
 
+    // 🔐 JOIN CODE (ONLY PRIVATE)
     String? joinCode;
-    final data = <String, dynamic>{
+    if (isPrivate) {
+      joinCode = await _generateJoinCode();
+    }
+
+    final docRef = await _db.collection('quizzes').add({
+      // BASIC INFO
       'title': cleanTitle,
       'topic': cleanTopic,
       'type': isPrivate ? 'private' : 'public',
+
+      // TIMING
+      'startAt': Timestamp.fromDate(startAt),
+      'endAt': Timestamp.fromDate(endAt),
+      'durationMinutes': durationMinutes,
+
+      // META
+      'joinCode': joinCode,
       'createdBy': user.uid,
       'isActive': true,
       'createdAt': FieldValue.serverTimestamp(),
-    };
-
-    if (isPrivate) {
-      joinCode = await _generateJoinCode();
-      data['joinCode'] = joinCode;
-    }
-
-    final docRef = await _db.collection('quizzes').add(data);
+    });
 
     return {
       'quizId': docRef.id,
-      'joinCode': joinCode, // null for public
+      'joinCode': joinCode,
     };
   }
 
-  /// ❓ Add question
+  // --------------------------------------------------
+  // ❓ ADD QUESTION
+  // --------------------------------------------------
   Future<void> addQuestion({
     required String quizId,
     required String question,
@@ -96,21 +116,14 @@ class AdminQuizService {
     if (quizId.isEmpty) {
       throw Exception("Invalid quiz ID");
     }
-
     if (question.trim().isEmpty) {
       throw Exception("Question required");
     }
-
     if (options.length != 4) {
       throw Exception("Exactly 4 options required");
     }
-
     if (correctIndex < 0 || correctIndex > 3) {
       throw Exception("Correct option must be between 0–3");
-    }
-
-    if (options.any((o) => o.trim().isEmpty)) {
-      throw Exception("Options cannot be empty");
     }
 
     await _db
@@ -125,7 +138,9 @@ class AdminQuizService {
     });
   }
 
-  /// 🔎 Join private quiz using code
+  // --------------------------------------------------
+  // 🔎 JOIN PRIVATE QUIZ USING CODE
+  // --------------------------------------------------
   Future<String> getQuizIdByJoinCode(String inputCode) async {
     final code = inputCode.trim().toUpperCase();
 
