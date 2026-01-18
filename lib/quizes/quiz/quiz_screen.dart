@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:quiz_app/quiz/quiz_result_screen.dart';
+import 'package:quiz_app/quizes/quiz/quiz_result_screen.dart';
 import 'services/attempt_service.dart';
 
 class QuizScreen extends StatefulWidget {

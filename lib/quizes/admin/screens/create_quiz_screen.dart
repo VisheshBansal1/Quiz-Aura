@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:quiz_app/admin/services/admin_quiz_service.dart';
+import 'package:quiz_app/quizes/admin/services/admin_quiz_service.dart';
 
 import 'add_question_screen.dart';
 import 'ai_generate_questions_screen.dart';

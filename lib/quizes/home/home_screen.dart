@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:quiz_app/admin/screens/admin_dashboard_screen.dart';
+import 'package:quiz_app/quizes/admin/screens/admin_dashboard_screen.dart';
 
 import 'home_page.dart';
 import 'history_screen.dart';

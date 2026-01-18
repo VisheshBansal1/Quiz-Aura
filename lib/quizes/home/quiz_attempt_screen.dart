@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:quiz_app/home/quiz_result_screen.dart';
+import 'package:quiz_app/quizes/home/quiz_result_screen.dart';
 
 class QuizAttemptScreen extends StatefulWidget {
   final String quizId;

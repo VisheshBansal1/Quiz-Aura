@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:quiz_app/login/login_screen.dart';
 
-import 'home/home_screen.dart';
+import 'quizes/home/home_screen.dart';
 
 // 🔑 Global navigator key
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();

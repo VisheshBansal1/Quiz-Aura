@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:quiz_app/home/answer_review_screen.dart';
-import 'package:quiz_app/home/home_screen.dart';
-import 'package:quiz_app/home/leaderboard/quiz_leaderboard_screen.dart';
+import 'package:quiz_app/quizes/home/answer_review_screen.dart';
+import 'package:quiz_app/quizes/home/home_screen.dart';
+import 'package:quiz_app/quizes/home/leaderboard/quiz_leaderboard_screen.dart';
 
 class QuizResultScreen extends StatelessWidget {
   final String quizId;

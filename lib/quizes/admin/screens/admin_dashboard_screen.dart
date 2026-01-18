@@ -1,9 +1,9 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:quiz_app/home/leaderboard/quiz_leaderboard_screen.dart';
+import 'package:quiz_app/quizes/home/leaderboard/quiz_leaderboard_screen.dart';
 
-import '../../login/login_screen.dart';
+import '../../../login/login_screen.dart';
 import 'create_quiz_screen.dart';
 import 'add_question_screen.dart';
 import 'ai_generate_questions_screen.dart';
