@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:quiz_app/home/leaderboard/quiz_leaderboard_screen.dart';
 
 import '../../login/login_screen.dart';
 import 'create_quiz_screen.dart';
@@ -19,7 +20,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 🔐 AUTH GUARD — kicks out instantly if logged out
+    // 🔐 AUTH GUARD
     if (_auth.currentUser == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         Navigator.pushAndRemoveUntil(
@@ -50,38 +51,35 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             .collection('quizzes')
             .orderBy('createdAt', descending: true)
             .snapshots(),
-
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
           if (snapshot.hasError) {
-            return const Center(
-              child: Text("Something went wrong"),
-            );
+            return const Center(child: Text("Something went wrong"));
           }
 
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(
-              child: Text("No quizzes created yet"),
-            );
-          }
+          final quizzes = snapshot.data?.docs ?? [];
 
-          final quizzes = snapshot.data!.docs;
+          if (quizzes.isEmpty) {
+            return const Center(child: Text("No quizzes created yet"));
+          }
 
           return ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: quizzes.length,
             itemBuilder: (context, i) {
-              final q = quizzes[i];
-              final data = q.data();
+              final doc = quizzes[i];
+              final data = doc.data();
+
+              final title = data['title'] ?? 'Quiz';
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
                   title: Text(
-                    data['title'] ?? 'Quiz',
+                    title,
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   subtitle: Column(
@@ -98,15 +96,27 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           context,
                           MaterialPageRoute(
                             builder: (_) =>
-                                AddQuestionScreen(quizId: q.id),
+                                AddQuestionScreen(quizId: doc.id),
                           ),
                         );
-                      } else if (value == 'ai') {
+                      } 
+                      else if (value == 'ai') {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) =>
-                                AiGenerateQuestionsScreen(quizId: q.id),
+                                AiGenerateQuestionsScreen(quizId: doc.id),
+                          ),
+                        );
+                      } 
+                      else if (value == 'leaderboard') {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => QuizLeaderboardScreen(
+                              quizId: doc.id,
+                              quizTitle: title,
+                            ),
                           ),
                         );
                       }
@@ -120,6 +130,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         value: 'ai',
                         child: Text("Generate with AI"),
                       ),
+                      PopupMenuDivider(),
+                      PopupMenuItem(
+                        value: 'leaderboard',
+                        child: Text("View Leaderboard"),
+                      ),
                     ],
                   ),
                 ),
@@ -131,7 +146,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  // 🔓 LOGOUT HANDLER (SAFE + GUARDED)
+  // 🔓 LOGOUT
   Future<void> _handleLogout() async {
     final shouldLogout = await showDialog<bool>(
       context: context,
@@ -153,22 +168,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
     if (shouldLogout != true) return;
 
-    try {
-      await _auth.signOut();
+    await _auth.signOut();
 
-      if (!mounted) return;
+    if (!mounted) return;
 
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (_) => false,
-      );
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Logout failed: $e")),
-      );
-    }
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (_) => false,
+    );
   }
 }

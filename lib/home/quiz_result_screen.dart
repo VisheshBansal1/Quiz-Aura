@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:quiz_app/home/answer_review_screen.dart';
 import 'package:quiz_app/home/home_screen.dart';
+import 'package:quiz_app/home/leaderboard/quiz_leaderboard_screen.dart';
 
 class QuizResultScreen extends StatelessWidget {
   final String quizId;
   final int score;
   final int total;
   final int percentage;
-  final Map<int, int> answers;
+  final Map<String, int> answers;
   final List<QueryDocumentSnapshot<Map<String, dynamic>>> questions;
   final DateTime endAt; // 🔥 REQUIRED
 
@@ -92,14 +93,32 @@ class QuizResultScreen extends StatelessWidget {
                             context,
                             MaterialPageRoute(
                               builder: (_) => AnswerReviewScreen(
-                                questions: questions,
-                                answers: answers,
+                                quizId: quizId,
+                                answers: answers, // ✅ Map<String, int>
                               ),
                             ),
                           );
                         }
                       : null, // 🔒 BLOCK EARLY REVIEW
                 ),
+              ),
+
+              SizedBox(height: 12),
+
+              ElevatedButton.icon(
+                icon: const Icon(Icons.leaderboard),
+                label: const Text("View Leaderboard"),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => QuizLeaderboardScreen(
+                        quizId: quizId,
+                        quizTitle: "Quiz",
+                      ),
+                    ),
+                  );
+                },
               ),
 
               const SizedBox(height: 12),
@@ -111,9 +130,7 @@ class QuizResultScreen extends StatelessWidget {
                   onPressed: () {
                     Navigator.pushAndRemoveUntil(
                       context,
-                      MaterialPageRoute(
-                        builder: (_) => const HomeScreen(),
-                      ),
+                      MaterialPageRoute(builder: (_) => const HomeScreen()),
                       (_) => false,
                     );
                   },

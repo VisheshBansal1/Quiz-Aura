@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:quiz_app/admin/screens/admin_dashboard_screen.dart';
 
 import 'home_page.dart';
-import 'leaderboard/leaderboard_screen.dart';
 import 'history_screen.dart';
 import '../settings/settings_screen.dart';
 
@@ -18,14 +17,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<Widget> _pages = const [
     HomePage(),
-    LeaderboardScreen(),
     HistoryScreen(),
     AdminDashboardScreen(), // 🔥 NEW
   ];
 
   final List<String> _titles = const [
     "Quiz App",
-    "Leaderboard",
     "History",
     "Admin Dashboard", // 🔥 NEW
   ];
@@ -76,10 +73,6 @@ class _HomeScreenState extends State<HomeScreen> {
             BottomNavigationBarItem(
               icon: Icon(Icons.home),
               label: "Home",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.leaderboard),
-              label: "Leaderboard",
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.history),

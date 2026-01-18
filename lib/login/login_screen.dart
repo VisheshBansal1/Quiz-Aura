@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 import '../auth/auth_service.dart';
 
@@ -24,21 +23,23 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  // ================= EMAIL LOGIN =================
   Future<void> _loginEmail() async {
     if (loading) return;
 
-    if (emailCtrl.text.isEmpty || passCtrl.text.isEmpty) {
+    final email = emailCtrl.text.trim();
+    final pass = passCtrl.text.trim();
+
+    if (email.isEmpty || pass.isEmpty) {
       _error("Email and password required");
       return;
     }
 
     setState(() => loading = true);
     try {
-      await auth.loginWithEmail(
-        emailCtrl.text.trim(),
-        passCtrl.text.trim(),
-      );
-      // 🔥 NOTHING ELSE
+      await auth.loginWithEmail(email, pass);
+      // 🔥 STOP HERE
+      // Navigation handled by authStateChanges()
     } catch (e) {
       _error(e.toString().replaceFirst("Exception: ", ""));
     } finally {
@@ -46,6 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  // ================= GOOGLE LOGIN =================
   Future<void> _loginGoogle() async {
     if (loading) return;
 
@@ -60,6 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _error(String msg) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg)),
     );
@@ -78,32 +81,54 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 const Text(
                   "Welcome",
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 32),
+
                 TextField(
                   controller: emailCtrl,
-                  decoration: const InputDecoration(labelText: "Email"),
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: "Email",
+                  ),
                 ),
+
                 const SizedBox(height: 12),
+
                 TextField(
                   controller: passCtrl,
                   obscureText: true,
-                  decoration: const InputDecoration(labelText: "Password"),
+                  decoration: const InputDecoration(
+                    labelText: "Password",
+                  ),
                 ),
+
                 const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: _loginEmail,
-                  child: const Text("Login"),
+
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: loading ? null : _loginEmail,
+                    child: const Text("Login"),
+                  ),
                 ),
+
                 const SizedBox(height: 12),
-                OutlinedButton(
-                  onPressed: _loginGoogle,
-                  child: const Text("Login with Google"),
+
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: loading ? null : _loginGoogle,
+                    child: const Text("Login with Google"),
+                  ),
                 ),
               ],
             ),
           ),
+
           if (loading)
             const Center(child: CircularProgressIndicator()),
         ],

@@ -6,7 +6,7 @@ import 'package:quiz_app/home/quiz_result_screen.dart';
 
 class QuizAttemptScreen extends StatefulWidget {
   final String quizId;
-  final DateTime endAt; // 🔥 authoritative end time
+  final DateTime endAt;
 
   const QuizAttemptScreen({
     super.key,
@@ -20,20 +20,26 @@ class QuizAttemptScreen extends StatefulWidget {
 
 class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
   int currentIndex = 0;
-  final Map<int, int> answers = {};
+
+  /// ✅ questionId -> selectedOptionIndex
+  final Map<String, int> answers = {};
 
   bool submitting = false;
   late int remainingSeconds;
   Timer? _timer;
 
-  late Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _questionsFuture;
+  late Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+      _questionsFuture;
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _questions = [];
+
+  late final DateTime _startedAt;
 
   @override
   void initState() {
     super.initState();
 
-    // 🔐 HARD CLAMP: if quiz already ended → 0
+    _startedAt = DateTime.now();
+
     remainingSeconds = widget.endAt
         .difference(DateTime.now())
         .inSeconds
@@ -49,7 +55,8 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
   }
 
   // ================= LOAD QUESTIONS =================
-  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _loadQuestions() async {
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+      _loadQuestions() async {
     final snap = await FirebaseFirestore.instance
         .collection('quizzes')
         .doc(widget.quizId)
@@ -63,11 +70,9 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
 
     _questions = snap.docs;
 
-    // ⏱ Start timer ONLY after questions are ready
     if (remainingSeconds > 0) {
       _startTimer();
     } else {
-      // Quiz already ended → auto submit immediately
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _submitQuiz(auto: true);
       });
@@ -96,7 +101,7 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
-      onWillPop: () async => false, // 🔒 no back
+      onWillPop: () async => false,
       child: Scaffold(
         appBar: AppBar(
           title: const Text("Quiz"),
@@ -113,15 +118,16 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
               return const Center(child: Text("Failed to load quiz"));
             }
 
-            final q = _questions[currentIndex].data();
+            final questionDoc = _questions[currentIndex];
+            final q = questionDoc.data();
             final options = List<String>.from(q['options']);
+            final questionId = questionDoc.id;
 
             return Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ⏱ TIMER
                   Text(
                     "Time left: ${remainingSeconds ~/ 60}:${(remainingSeconds % 60).toString().padLeft(2, '0')}",
                     style: const TextStyle(
@@ -156,16 +162,22 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
                   const SizedBox(height: 20),
 
                   ...List.generate(options.length, (i) {
-                    final selected = answers[currentIndex] == i;
+                    final selected = answers[questionId] == i;
                     return Card(
                       color: selected
-                          ? Theme.of(context).colorScheme.primaryContainer
+                          ? Theme.of(context)
+                              .colorScheme
+                              .primaryContainer
                           : null,
                       child: ListTile(
                         title: Text(options[i]),
                         onTap: submitting
                             ? null
-                            : () => setState(() => answers[currentIndex] = i),
+                            : () {
+                                setState(() {
+                                  answers[questionId] = i;
+                                });
+                              },
                       ),
                     );
                   }),
@@ -190,12 +202,13 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
                           onPressed: submitting
                               ? null
                               : () {
-                                  if (!answers.containsKey(currentIndex)) {
+                                  if (!answers.containsKey(questionId)) {
                                     _error("Please select an option");
                                     return;
                                   }
 
-                                  if (currentIndex == _questions.length - 1) {
+                                  if (currentIndex ==
+                                      _questions.length - 1) {
                                     _submitQuiz();
                                   } else {
                                     setState(() => currentIndex++);
@@ -229,9 +242,11 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
     try {
       int score = 0;
 
-      for (int i = 0; i < _questions.length; i++) {
-        final correctIndex = _questions[i]['correctIndex'] as int?;
-        if (correctIndex != null && answers[i] == correctIndex) {
+      for (final q in _questions) {
+        final correctIndex = q['correctIndex'] as int?;
+        final selectedIndex = answers[q.id];
+
+        if (correctIndex != null && selectedIndex == correctIndex) {
           score++;
         }
       }
@@ -242,16 +257,22 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
       final total = _questions.length;
       final percentage = ((score / total) * 100).round();
 
+      final int timeTakenSeconds =
+          DateTime.now().difference(_startedAt).inSeconds;
+
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .collection('attempts')
           .add({
         'quizId': widget.quizId,
+        'userId': user.uid,
         'score': score,
         'total': total,
         'percentage': percentage,
+        'startedAt': _startedAt,
         'attemptedAt': FieldValue.serverTimestamp(),
+        'timeTakenSeconds': timeTakenSeconds,
         'autoSubmitted': auto,
       });
 
@@ -265,7 +286,7 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
             score: score,
             total: total,
             percentage: percentage,
-            answers: Map<int, int>.from(answers),
+            answers: Map<String, int>.from(answers),
             questions: List.from(_questions),
             endAt: widget.endAt,
           ),

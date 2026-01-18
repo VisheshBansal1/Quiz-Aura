@@ -1,44 +1,85 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  /// 🔐 Login with email & password
-  Future<User?> loginWithEmail(String email, String password) async {
+  // ================= SAVE USER =================
+  Future<void> _saveUser(User user, {String? name}) async {
+    final ref = _db.collection('users').doc(user.uid);
+    final snap = await ref.get();
+
+    if (!snap.exists) {
+      // 🆕 First time user
+      await ref.set({
+        'uid': user.uid,
+        'email': user.email,
+        'name': name ?? user.displayName ?? 'User',
+        'provider': user.providerData.first.providerId,
+        'createdAt': FieldValue.serverTimestamp(),
+        'lastLoginAt': FieldValue.serverTimestamp(),
+      });
+    } else {
+      // 🔁 Existing user
+      await ref.update({
+        'lastLoginAt': FieldValue.serverTimestamp(),
+      });
+    }
+  }
+
+  // ================= LOGIN EMAIL =================
+  Future<User> loginWithEmail(String email, String password) async {
     try {
       final cred = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
-      return cred.user;
+
+      final user = cred.user!;
+      await _saveUser(user);
+
+      return user;
     } on FirebaseAuthException catch (e) {
       throw _mapAuthError(e);
     }
   }
 
-  /// 🆕 Register new user
-  Future<User?> registerWithEmail(String email, String password) async {
+  // ================= REGISTER EMAIL =================
+  Future<User> registerWithEmail(
+    String email,
+    String password,
+    String name,
+  ) async {
     try {
       final cred = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
-      await cred.user?.sendEmailVerification();
-      return cred.user;
+
+      final user = cred.user!;
+      await user.updateDisplayName(name);
+      await user.sendEmailVerification();
+
+      await _saveUser(user, name: name);
+
+      return user;
     } on FirebaseAuthException catch (e) {
       throw _mapAuthError(e);
     }
   }
 
-  Future<User?> loginWithGoogle() async {
+  // ================= LOGIN GOOGLE =================
+  Future<User> loginWithGoogle() async {
     try {
       final googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
-
-      await googleSignIn.signOut();
+      await googleSignIn.signOut(); // 🔒 force fresh login
 
       final googleUser = await googleSignIn.signIn();
-      if (googleUser == null) return null;
+      if (googleUser == null) {
+        throw Exception("Google sign-in cancelled");
+      }
 
       final googleAuth = await googleUser.authentication;
 
@@ -48,27 +89,30 @@ class AuthService {
       );
 
       final userCred = await _auth.signInWithCredential(credential);
-      return userCred.user;
+      final user = userCred.user!;
+
+      await _saveUser(user, name: googleUser.displayName);
+
+      return user;
     } catch (e) {
-      throw Exception(e.toString());
+      throw Exception("Google login failed");
     }
   }
 
-  /// 🚪 Logout
+  // ================= LOGOUT =================
   Future<void> logout() async {
     try {
-      final googleSignIn = GoogleSignIn();
-      await googleSignIn.signOut();
+      await GoogleSignIn().signOut();
     } catch (_) {}
     await _auth.signOut();
   }
 
-  /// 🔄 Auth state stream
+  // ================= AUTH STATE =================
   Stream<User?> authStateChanges() {
     return _auth.authStateChanges();
   }
 
-  /// ❌ Centralized error handling
+  // ================= ERROR MAPPING =================
   Exception _mapAuthError(FirebaseAuthException e) {
     switch (e.code) {
       case 'user-not-found':

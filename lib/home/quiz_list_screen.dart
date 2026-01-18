@@ -52,10 +52,8 @@ class QuizListScreen extends StatelessWidget {
               final String title = data['title'] ?? 'Quiz';
               final bool isPrivate = data['type'] == 'private';
 
-              final DateTime startAt =
-                  (data['startAt'] as Timestamp).toDate();
-              final DateTime endAt =
-                  (data['endAt'] as Timestamp).toDate();
+              final DateTime startAt = (data['startAt'] as Timestamp).toDate();
+              final DateTime endAt = (data['endAt'] as Timestamp).toDate();
 
               final DateTime now = DateTime.now();
 
@@ -91,17 +89,13 @@ class QuizListScreen extends StatelessWidget {
                             : "Public quiz",
                         style: TextStyle(
                           fontSize: 12,
-                          color:
-                              isPrivate ? Colors.redAccent : Colors.blue,
+                          color: isPrivate ? Colors.redAccent : Colors.blue,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         statusText,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: statusColor,
-                        ),
+                        style: TextStyle(fontSize: 12, color: statusColor),
                       ),
                     ],
                   ),
@@ -126,8 +120,7 @@ class QuizListScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) =>
-                              QuizEndedScreen(quizTitle: title),
+                          builder: (_) => QuizEndedScreen(quizTitle: title),
                         ),
                       );
                       return;
@@ -135,38 +128,35 @@ class QuizListScreen extends StatelessWidget {
 
                     // ⏳ QUIZ NOT STARTED → RULES
                     // ⏳ QUIZ NOT STARTED → RULES
-if (now.isBefore(startAt)) {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => QuizRulesScreen(
-        startAt: startAt,
-        onConfirmedStart: () {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => QuizAttemptScreen(
-                quizId: doc.id,
-                endAt: endAt,
-              ),
-            ),
-          );
-        },
-      ),
-    ),
-  );
-  return;
-}
-
+                    if (now.isBefore(startAt)) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => QuizRulesScreen(
+                            startAt: startAt,
+                            onConfirmedStart: () {
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => QuizAttemptScreen(
+                                    quizId: doc.id,
+                                    endAt: endAt,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      );
+                      return;
+                    }
 
                     // ✅ QUIZ LIVE → START
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => QuizAttemptScreen(
-                          quizId: doc.id,
-                          endAt: endAt,
-                        ),
+                        builder: (_) =>
+                            QuizAttemptScreen(quizId: doc.id, endAt: endAt),
                       ),
                     );
                   },

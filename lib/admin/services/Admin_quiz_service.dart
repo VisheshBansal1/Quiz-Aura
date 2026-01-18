@@ -10,24 +10,13 @@ class AdminQuizService {
   // --------------------------------------------------
   // 🔐 Generate unique 6-char join code
   // --------------------------------------------------
-  Future<String> _generateJoinCode() async {
-    for (int i = 0; i < 5; i++) {
-      final code = List.generate(
-        6,
-        (_) => _chars[Random.secure().nextInt(_chars.length)],
-      ).join();
-
-      final snap = await _db
-          .collection('quizzes')
-          .where('joinCode', isEqualTo: code)
-          .limit(1)
-          .get();
-
-      if (snap.docs.isEmpty) {
-        return code;
-      }
-    }
-    throw Exception("Failed to generate join code");
+  String _generateJoinCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final rand = DateTime.now().microsecondsSinceEpoch;
+    return List.generate(
+      6,
+      (i) => chars[(rand + i * 31) % chars.length],
+    ).join();
   }
 
   // --------------------------------------------------
@@ -37,71 +26,29 @@ class AdminQuizService {
     required String title,
     required String topic,
     required bool isPrivate,
-
-    // 🔥 NEW (MANDATORY)
     required DateTime startAt,
     required DateTime endAt,
     required int durationMinutes,
   }) async {
-    final cleanTitle = title.trim();
-    final cleanTopic = topic.trim();
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) throw Exception("User not logged in");
 
-    if (cleanTitle.isEmpty) {
-      throw Exception("Quiz title required");
-    }
-    if (cleanTopic.isEmpty) {
-      throw Exception("Topic required");
-    }
-    if (endAt.isBefore(startAt)) {
-      throw Exception("End time must be after start time");
-    }
+    final String? joinCode = isPrivate ? _generateJoinCode() : null;
 
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      throw Exception("User not authenticated");
-    }
-
-    // 🔒 Prevent duplicate quiz by same user
-    final duplicateCheck = await _db
-        .collection('quizzes')
-        .where('createdBy', isEqualTo: user.uid)
-        .where('title', isEqualTo: cleanTitle)
-        .where('topic', isEqualTo: cleanTopic)
-        .limit(1)
-        .get();
-
-    if (duplicateCheck.docs.isNotEmpty) {
-      throw Exception("You already created this quiz");
-    }
-
-    // 🔐 JOIN CODE (ONLY PRIVATE)
-    String? joinCode;
-    if (isPrivate) {
-      joinCode = await _generateJoinCode();
-    }
-
-    final docRef = await _db.collection('quizzes').add({
-      // BASIC INFO
-      'title': cleanTitle,
-      'topic': cleanTopic,
+    final doc = await FirebaseFirestore.instance.collection('quizzes').add({
+      'title': title,
+      'topic': topic,
       'type': isPrivate ? 'private' : 'public',
-
-      // TIMING
-      'startAt': Timestamp.fromDate(startAt),
-      'endAt': Timestamp.fromDate(endAt),
-      'durationMinutes': durationMinutes,
-
-      // META
-      'joinCode': joinCode,
-      'createdBy': user.uid,
-      'isActive': true,
+      'joinCode': joinCode, // ✅ null for public
+      'createdBy': uid,
       'createdAt': FieldValue.serverTimestamp(),
+      'isActive': true,
+      'startAt': startAt,
+      'endAt': endAt,
+      'durationMinutes': durationMinutes,
     });
 
-    return {
-      'quizId': docRef.id,
-      'joinCode': joinCode,
-    };
+    return {'quizId': doc.id, 'joinCode': joinCode};
   }
 
   // --------------------------------------------------
@@ -126,11 +73,7 @@ class AdminQuizService {
       throw Exception("Correct option must be between 0–3");
     }
 
-    await _db
-        .collection('quizzes')
-        .doc(quizId)
-        .collection('questions')
-        .add({
+    await _db.collection('quizzes').doc(quizId).collection('questions').add({
       'question': question.trim(),
       'options': options.map((e) => e.trim()).toList(),
       'correctIndex': correctIndex,

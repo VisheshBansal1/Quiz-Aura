@@ -89,60 +89,56 @@ class _QuizRulesScreenState extends State<QuizRulesScreen> {
   Widget build(BuildContext context) {
     final canStart = remaining == Duration.zero;
 
-    return WillPopScope(
-      onWillPop: () async => false,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text("Quiz Rules"),
-          automaticallyImplyLeading: false,
-        ),
-        body: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "Quiz Rules",
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              const Text("• No back navigation"),
-              const Text("• Timer based quiz"),
-              const Text("• Auto submit on timeout"),
-              const SizedBox(height: 24),
-              const Divider(),
-              const SizedBox(height: 16),
-              Center(
-                child: Column(
-                  children: [
-                    Text(
-                      canStart ? "Quiz is live" : "Quiz starts in",
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      canStart ? "READY" : _format(remaining),
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: canStart ? Colors.green : Colors.red,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Spacer(),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: canStart ? _confirmAndStart : null,
-                  child: Text(
-                    canStart ? "Join Quiz" : "Waiting for start time",
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Quiz Rules"),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Quiz Rules",
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            const Text("• No back navigation"),
+            const Text("• Timer based quiz"),
+            const Text("• Auto submit on timeout"),
+            const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 16),
+            Center(
+              child: Column(
+                children: [
+                  Text(
+                    canStart ? "Quiz is live" : "Quiz starts in",
+                    style: const TextStyle(fontSize: 16),
                   ),
+                  const SizedBox(height: 8),
+                  Text(
+                    canStart ? "READY" : _format(remaining),
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: canStart ? Colors.green : Colors.red,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Spacer(),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: canStart ? _confirmAndStart : null,
+                child: Text(
+                  canStart ? "Join Quiz" : "Waiting for start time",
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
