@@ -21,7 +21,7 @@ class QuizAttemptScreen extends StatefulWidget {
 class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
   int currentIndex = 0;
 
-  /// ✅ questionId -> selectedOptionIndex
+  /// questionId -> selectedOptionIndex
   final Map<String, int> answers = {};
 
   bool submitting = false;
@@ -103,130 +103,194 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
     return WillPopScope(
       onWillPop: () async => false,
       child: Scaffold(
+        backgroundColor: Colors.black,
         appBar: AppBar(
           title: const Text("Quiz"),
           automaticallyImplyLeading: false,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          flexibleSpace: _gradientBg(),
         ),
-        body: FutureBuilder<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
-          future: _questionsFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
+        body: Stack(
+          children: [
+            _gradientBg(),
 
-            if (snapshot.hasError || !snapshot.hasData) {
-              return const Center(child: Text("Failed to load quiz"));
-            }
+            FutureBuilder<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
+              future: _questionsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child:
+                        CircularProgressIndicator(color: Colors.white),
+                  );
+                }
 
-            final questionDoc = _questions[currentIndex];
-            final q = questionDoc.data();
-            final options = List<String>.from(q['options']);
-            final questionId = questionDoc.id;
-
-            return Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Time left: ${remainingSeconds ~/ 60}:${(remainingSeconds % 60).toString().padLeft(2, '0')}",
-                    style: const TextStyle(
-                      color: Colors.red,
-                      fontWeight: FontWeight.bold,
+                if (snapshot.hasError || !snapshot.hasData) {
+                  return const Center(
+                    child: Text(
+                      "Failed to load quiz",
+                      style: TextStyle(color: Colors.white70),
                     ),
-                  ),
+                  );
+                }
 
-                  const SizedBox(height: 8),
+                final questionDoc = _questions[currentIndex];
+                final q = questionDoc.data();
+                final options = List<String>.from(q['options']);
+                final questionId = questionDoc.id;
 
-                  LinearProgressIndicator(
-                    value: (currentIndex + 1) / _questions.length,
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  Text(
-                    "Question ${currentIndex + 1} of ${_questions.length}",
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  Text(
-                    q['question'],
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  ...List.generate(options.length, (i) {
-                    final selected = answers[questionId] == i;
-                    return Card(
-                      color: selected
-                          ? Theme.of(context)
-                              .colorScheme
-                              .primaryContainer
-                          : null,
-                      child: ListTile(
-                        title: Text(options[i]),
-                        onTap: submitting
-                            ? null
-                            : () {
-                                setState(() {
-                                  answers[questionId] = i;
-                                });
-                              },
-                      ),
-                    );
-                  }),
-
-                  const Spacer(),
-
-                  Row(
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (currentIndex > 0)
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: submitting
-                                ? null
-                                : () => setState(() => currentIndex--),
-                            child: const Text("Previous"),
+                      // ===== TIMER =====
+                      _glassCard(
+                        child: Row(
+                          mainAxisAlignment:
+                              MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              "Time Left",
+                              style: const TextStyle(
+                                  color: Colors.white70),
+                            ),
+                            Text(
+                              "${remainingSeconds ~/ 60}:${(remainingSeconds % 60).toString().padLeft(2, '0')}",
+                              style: const TextStyle(
+                                color: Colors.redAccent,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // ===== PROGRESS =====
+                      LinearProgressIndicator(
+                        value:
+                            (currentIndex + 1) / _questions.length,
+                        backgroundColor:
+                            Colors.white.withOpacity(0.2),
+                        valueColor:
+                            const AlwaysStoppedAnimation<Color>(
+                                Colors.greenAccent),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      Text(
+                        "Question ${currentIndex + 1} of ${_questions.length}",
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // ===== QUESTION =====
+                      _glassCard(
+                        child: Text(
+                          q['question'],
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
                           ),
                         ),
-                      if (currentIndex > 0) const SizedBox(width: 12),
+                      ),
 
+                      const SizedBox(height: 16),
+
+                      // ===== OPTIONS =====
                       Expanded(
-                        child: ElevatedButton(
-                          onPressed: submitting
-                              ? null
-                              : () {
-                                  if (!answers.containsKey(questionId)) {
-                                    _error("Please select an option");
-                                    return;
-                                  }
+                        child: ListView.builder(
+                          itemCount: options.length,
+                          itemBuilder: (_, i) {
+                            final selected =
+                                answers[questionId] == i;
 
-                                  if (currentIndex ==
-                                      _questions.length - 1) {
-                                    _submitQuiz();
-                                  } else {
-                                    setState(() => currentIndex++);
-                                  }
-                                },
-                          child: Text(
-                            currentIndex == _questions.length - 1
-                                ? "Submit"
-                                : "Next",
-                          ),
+                            return _optionTile(
+                              text: options[i],
+                              selected: selected,
+                              onTap: submitting
+                                  ? null
+                                  : () {
+                                      setState(() {
+                                        answers[questionId] = i;
+                                      });
+                                    },
+                            );
+                          },
                         ),
+                      ),
+
+                      // ===== NAVIGATION =====
+                      Row(
+                        children: [
+                          if (currentIndex > 0)
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: submitting
+                                    ? null
+                                    : () => setState(
+                                        () => currentIndex--),
+                                child:
+                                    const Text("Previous"),
+                              ),
+                            ),
+                          if (currentIndex > 0)
+                            const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: submitting
+                                  ? null
+                                  : () {
+                                      if (!answers
+                                          .containsKey(questionId)) {
+                                        _error(
+                                            "Please select an option");
+                                        return;
+                                      }
+
+                                      if (currentIndex ==
+                                          _questions.length -
+                                              1) {
+                                        _submitQuiz();
+                                      } else {
+                                        setState(
+                                            () => currentIndex++);
+                                      }
+                                    },
+                              child: Text(
+                                currentIndex ==
+                                        _questions.length - 1
+                                    ? "Submit"
+                                    : "Next",
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
+                );
+              },
+            ),
+
+            if (submitting)
+              Container(
+                color: Colors.black.withOpacity(0.4),
+                child: const Center(
+                  child: CircularProgressIndicator(
+                      color: Colors.white),
+                ),
               ),
-            );
-          },
+          ],
         ),
       ),
     );
@@ -246,7 +310,8 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
         final correctIndex = q['correctIndex'] as int?;
         final selectedIndex = answers[q.id];
 
-        if (correctIndex != null && selectedIndex == correctIndex) {
+        if (correctIndex != null &&
+            selectedIndex == correctIndex) {
           score++;
         }
       }
@@ -294,7 +359,8 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
       );
     } catch (e) {
       if (mounted) {
-        _error(e.toString().replaceFirst('Exception: ', ''));
+        _error(
+            e.toString().replaceFirst('Exception: ', ''));
         setState(() => submitting = false);
       }
     }
@@ -303,5 +369,80 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
   void _error(String msg) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  // ================= UI HELPERS =================
+
+  Widget _gradientBg() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF0F2027),
+            Color(0xFF203A43),
+            Color(0xFF2C5364),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _glassCard({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: Colors.white.withOpacity(0.12),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.25),
+        ),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _optionTile({
+    required String text,
+    required bool selected,
+    required VoidCallback? onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: selected
+              ? Colors.green.withOpacity(0.25)
+              : Colors.white.withOpacity(0.12),
+          border: Border.all(
+            color: selected
+                ? Colors.greenAccent
+                : Colors.white.withOpacity(0.25),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                text,
+                style: const TextStyle(
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            if (selected)
+              const Icon(
+                Icons.check_circle,
+                color: Colors.greenAccent,
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }

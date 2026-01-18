@@ -174,32 +174,57 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Create Quiz")),
+      backgroundColor: Colors.black,
       body: Stack(
         children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // ---------------- QUIZ INFO ----------------
-                  Card(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+          // ===== BACKGROUND =====
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF0F2027),
+                  Color(0xFF203A43),
+                  Color(0xFF2C5364),
+                ],
+              ),
+            ),
+          ),
+
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // ===== HEADER =====
+                    const Text(
+                      "Create Quiz",
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
+                    const SizedBox(height: 6),
+                    const Text(
+                      "Configure quiz details and timing",
+                      style: TextStyle(color: Colors.white70),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // ===== QUIZ DETAILS CARD =====
+                    _glassCard(
                       child: Column(
                         children: [
-                          // TITLE
-                          TextFormField(
-                            controller: titleCtrl,
+                          _glassInput(
                             enabled: quizId == null,
-                            decoration: const InputDecoration(
-                              labelText: "Quiz Title",
-                            ),
+                            controller: titleCtrl,
+                            label: "Quiz Title",
                             validator: (v) => v == null || v.trim().isEmpty
                                 ? "Title required"
                                 : null,
@@ -207,7 +232,6 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
 
                           const SizedBox(height: 16),
 
-                          // ---------------- TOPIC ----------------
                           if (quizId == null)
                             StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                               stream: FirebaseFirestore.instance
@@ -216,22 +240,21 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
                                   .snapshots(),
                               builder: (context, snapshot) {
                                 if (!snapshot.hasData) {
-                                  return const CircularProgressIndicator();
+                                  return const CircularProgressIndicator(
+                                    color: Colors.white,
+                                  );
                                 }
 
-                                final docs = snapshot.data!.docs;
-                                final topics = docs
+                                final topics = snapshot.data!.docs
                                     .map((d) => d.data()['title'] as String)
                                     .toList();
 
                                 if (topics.isEmpty || showCreateTopic) {
                                   return Column(
                                     children: [
-                                      TextFormField(
+                                      _glassInput(
                                         controller: topicCtrl,
-                                        decoration: const InputDecoration(
-                                          labelText: "New Topic",
-                                        ),
+                                        label: "New Topic",
                                       ),
                                       const SizedBox(height: 8),
                                       ElevatedButton(
@@ -245,22 +268,31 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
                                 return Column(
                                   children: [
                                     DropdownButtonFormField<String>(
+                                      dropdownColor: const Color(0xFF203A43),
                                       value: topics.contains(selectedTopic)
                                           ? selectedTopic
                                           : null,
-                                      hint: const Text("Select Topic"),
+                                      hint: const Text(
+                                        "Select Topic",
+                                        style: TextStyle(color: Colors.white70),
+                                      ),
                                       items: topics
                                           .map(
                                             (t) => DropdownMenuItem(
                                               value: t,
-                                              child: Text(t),
+                                              child: Text(
+                                                t,
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                ),
+                                              ),
                                             ),
                                           )
                                           .toList(),
                                       onChanged: (v) =>
                                           setState(() => selectedTopic = v),
                                       validator: (v) =>
-                                          v == null ? "Select a topic" : null,
+                                          v == null ? "Select topic" : null,
                                     ),
                                     TextButton(
                                       onPressed: () => setState(
@@ -275,18 +307,21 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
 
                           const SizedBox(height: 16),
 
-                          // ---------------- START TIME ----------------
+                          // ===== TIME =====
                           ListTile(
                             title: Text(
                               startTime == null
                                   ? "Select Quiz Start Time"
                                   : "Starts at: ${startTime!.toLocal()}",
+                              style: const TextStyle(color: Colors.white),
                             ),
-                            trailing: const Icon(Icons.schedule),
+                            trailing: const Icon(
+                              Icons.schedule,
+                              color: Colors.white,
+                            ),
                             onTap: quizId == null
                                 ? () async {
                                     final now = DateTime.now();
-
                                     final date = await showDatePicker(
                                       context: context,
                                       initialDate: now,
@@ -318,31 +353,31 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
 
                           const SizedBox(height: 12),
 
-                          // ---------------- DURATION ----------------
-                          TextFormField(
+                          _glassInput(
+                            label: "Duration (minutes)",
                             initialValue: "30",
                             keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: "Duration (minutes)",
-                            ),
+                            onChanged: (v) =>
+                                durationMinutes = int.tryParse(v) ?? 30,
                             validator: (v) {
                               final m = int.tryParse(v ?? "");
-                              if (m == null || m < 1) {
-                                return "Invalid duration";
-                              }
-                              return null;
-                            },
-                            onChanged: (v) {
-                              durationMinutes = int.tryParse(v) ?? 30;
+                              return m == null || m < 1
+                                  ? "Invalid duration"
+                                  : null;
                             },
                           ),
 
                           const SizedBox(height: 12),
 
-                          // ---------------- PRIVATE ----------------
                           SwitchListTile(
-                            title: const Text("Private Quiz"),
-                            subtitle: const Text("Requires join code"),
+                            title: const Text(
+                              "Private Quiz",
+                              style: TextStyle(color: Colors.white),
+                            ),
+                            subtitle: const Text(
+                              "Requires join code",
+                              style: TextStyle(color: Colors.white70),
+                            ),
                             value: isPrivate,
                             onChanged: quizId == null
                                 ? (v) => setState(() => isPrivate = v)
@@ -351,29 +386,39 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
                         ],
                       ),
                     ),
-                  ),
 
-                  const SizedBox(height: 24),
+                    const SizedBox(height: 24),
 
-                  // ---------------- CREATE ----------------
-                  ElevatedButton(
-                    onPressed: quizId == null ? _createQuiz : null,
-                    child: const Text("Create Quiz"),
-                  ),
+                    // ===== CREATE BUTTON =====
+                    SizedBox(
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: quizId == null ? _createQuiz : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: const Text(
+                          "Create Quiz",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
 
-                  // ---------------- AFTER CREATE ----------------
-                  if (quizId != null) ...[
-                    const SizedBox(height: 32),
+                    // ===== AFTER CREATE =====
+                    if (quizId != null) ...[
+                      const SizedBox(height: 32),
 
-                    if (joinCode != null)
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
+                      if (joinCode != null)
+                        _glassCard(
                           child: Column(
                             children: [
                               const Text(
                                 "JOIN CODE",
-                                style: TextStyle(fontWeight: FontWeight.bold),
+                                style: TextStyle(color: Colors.white70),
                               ),
                               const SizedBox(height: 8),
                               SelectableText(
@@ -381,57 +426,103 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
                                 style: const TextStyle(
                                   fontSize: 28,
                                   fontWeight: FontWeight.bold,
-                                  letterSpacing: 2,
+                                  letterSpacing: 3,
+                                  color: Colors.white,
                                 ),
                               ),
                             ],
                           ),
                         ),
+
+                      const SizedBox(height: 16),
+
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.add),
+                        label: const Text("Add Questions"),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  AddQuestionScreen(quizId: quizId!),
+                            ),
+                          );
+                        },
                       ),
 
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 12),
 
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.add),
-                      label: const Text("Add Questions"),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => AddQuestionScreen(quizId: quizId!),
-                          ),
-                        );
-                      },
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.auto_awesome),
-                      label: const Text("Generate with AI"),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                AiGenerateQuestionsScreen(quizId: quizId!),
-                          ),
-                        );
-                      },
-                    ),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.auto_awesome),
+                        label: const Text("Generate with AI"),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  AiGenerateQuestionsScreen(quizId: quizId!),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
 
           if (loading)
             Container(
-              color: Colors.black.withOpacity(0.3),
-              child: const Center(child: CircularProgressIndicator()),
+              color: Colors.black.withOpacity(0.4),
+              child: const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              ),
             ),
         ],
       ),
     );
   }
+}
+
+Widget _glassCard({required Widget child}) {
+  return Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(20),
+      color: Colors.white.withOpacity(0.12),
+      border: Border.all(color: Colors.white.withOpacity(0.25)),
+    ),
+    child: child,
+  );
+}
+
+Widget _glassInput({
+  TextEditingController? controller,
+  String? initialValue,
+  required String label,
+  bool enabled = true,
+  TextInputType? keyboardType,
+  FormFieldValidator<String>? validator,
+  ValueChanged<String>? onChanged,
+}) {
+  return TextFormField(
+    controller: controller,
+    initialValue: initialValue,
+    enabled: enabled,
+    keyboardType: keyboardType,
+    validator: validator,
+    onChanged: onChanged,
+    style: const TextStyle(color: Colors.white),
+    decoration: InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(color: Colors.white70),
+      filled: true,
+      fillColor: Colors.white.withOpacity(0.15),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide.none,
+      ),
+    ),
+  );
 }

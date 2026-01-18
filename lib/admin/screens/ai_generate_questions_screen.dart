@@ -15,7 +15,6 @@ class AiGenerateQuestionsScreen extends StatefulWidget {
 
 class _AiGenerateQuestionsScreenState
     extends State<AiGenerateQuestionsScreen> {
-
   late GroqAIService groqAIService;
   late AdminQuizService quizService;
 
@@ -35,33 +34,29 @@ class _AiGenerateQuestionsScreenState
     _loadQuizTopic();
   }
 
-  /// 🔹 Fetch quiz topic
+  // ================= LOAD QUIZ TOPIC =================
   Future<void> _loadQuizTopic() async {
     final snap = await FirebaseFirestore.instance
         .collection('quizzes')
         .doc(widget.quizId)
         .get();
 
-    print("QUIZ DOC EXISTS => ${snap.exists}");
-    print("QUIZ DOC DATA => ${snap.data()}");
-
     if (!mounted) return;
 
-    setState(() {
-      final data = snap.data();
-      final t = data?['topic'];
+    final data = snap.data();
+    final t = data?['topic'];
 
-      // ✅ Safe assignment
+    setState(() {
       topic = (t is String && t.trim().isNotEmpty) ? t : null;
     });
   }
 
-  /// 🤖 Generate questions
+  // ================= GENERATE AI QUESTIONS =================
   Future<void> generate() async {
     if (loading) return;
 
     if (topic == null) {
-      _error("Quiz topic not found. Check Firestore field name.");
+      _error("Quiz topic not found. Check Firestore field.");
       return;
     }
 
@@ -77,9 +72,6 @@ class _AiGenerateQuestionsScreenState
         count: 5,
       );
 
-      print("AI QUESTIONS COUNT => ${result.length}");
-      print(result);
-
       if (!mounted) return;
 
       if (result.isEmpty) {
@@ -87,16 +79,14 @@ class _AiGenerateQuestionsScreenState
       } else {
         setState(() => questions = result);
       }
-    } catch (e, s) {
-      print("AI ERROR => $e");
-      print(s);
+    } catch (e) {
       _error(e.toString());
     } finally {
       if (mounted) setState(() => loading = false);
     }
   }
 
-  /// 💾 Save questions
+  // ================= SAVE QUESTIONS =================
   Future<void> saveAll() async {
     if (saving || questions.isEmpty) return;
 
@@ -129,87 +119,206 @@ class _AiGenerateQuestionsScreenState
     );
   }
 
+  // ================= BUILD =================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("AI Question Generator")),
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text("AI Question Generator"),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: _gradientBg(),
+      ),
       body: Stack(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Text(
-                  topic == null
-                      ? "Loading quiz topic..."
-                      : "Topic: $topic",
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
+          _gradientBg(),
 
-                const SizedBox(height: 16),
-
-                DropdownButtonFormField<String>(
-                  value: difficulty,
-                  items: const [
-                    DropdownMenuItem(value: "Easy", child: Text("Easy")),
-                    DropdownMenuItem(value: "Medium", child: Text("Medium")),
-                    DropdownMenuItem(value: "Hard", child: Text("Hard")),
-                  ],
-                  onChanged:
-                      loading ? null : (v) => setState(() => difficulty = v!),
-                  decoration: const InputDecoration(
-                    labelText: "Difficulty",
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                ElevatedButton.icon(
-                  onPressed: loading ? null : generate, // ✅ ALWAYS clickable
-                  icon: const Icon(Icons.auto_awesome),
-                  label: const Text("Generate Questions"),
-                ),
-
-                const SizedBox(height: 20),
-
-                Expanded(
-                  child: questions.isEmpty
-                      ? const Center(
-                          child: Text("No AI questions generated yet"),
-                        )
-                      : ListView.builder(
-                          itemCount: questions.length,
-                          itemBuilder: (_, i) {
-                            final q = questions[i];
-                            return Card(
-                              child: ListTile(
-                                title: Text(q['question']),
-                                subtitle: Text(
-                                  "Correct: ${q['options'][q['correctIndex']]}",
-                                ),
-                              ),
-                            );
-                          },
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  // ===== HEADER =====
+                  _glassCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Quiz Topic",
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 13,
+                          ),
                         ),
-                ),
-
-                if (questions.isNotEmpty)
-                  ElevatedButton(
-                    onPressed: saving ? null : saveAll,
-                    child: const Text("Save All to Quiz"),
+                        const SizedBox(height: 4),
+                        Text(
+                          topic ?? "Loading...",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-              ],
+
+                  const SizedBox(height: 16),
+
+                  // ===== CONTROLS =====
+                  _glassCard(
+                    child: Column(
+                      children: [
+                        DropdownButtonFormField<String>(
+                          dropdownColor: const Color(0xFF203A43),
+                          value: difficulty,
+                          items: const [
+                            DropdownMenuItem(
+                                value: "Easy", child: Text("Easy")),
+                            DropdownMenuItem(
+                                value: "Medium", child: Text("Medium")),
+                            DropdownMenuItem(
+                                value: "Hard", child: Text("Hard")),
+                          ],
+                          onChanged: loading
+                              ? null
+                              : (v) => setState(() => difficulty = v!),
+                          decoration: const InputDecoration(
+                            labelText: "Difficulty",
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: ElevatedButton.icon(
+                            onPressed: loading ? null : generate,
+                            icon: const Icon(Icons.auto_awesome),
+                            label: const Text("Generate Questions"),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // ===== QUESTIONS =====
+                  Expanded(
+                    child: questions.isEmpty
+                        ? const Center(
+                            child: Text(
+                              "No AI questions generated yet",
+                              style: TextStyle(color: Colors.white70),
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: questions.length,
+                            itemBuilder: (_, i) {
+                              final q = questions[i];
+                              return _questionPreview(q, i + 1);
+                            },
+                          ),
+                  ),
+
+                  if (questions.isNotEmpty)
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: saving ? null : saveAll,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black,
+                        ),
+                        child: const Text(
+                          "Save All to Quiz",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
 
           if (loading || saving)
             Container(
-              color: Colors.black.withOpacity(0.3),
-              child: const Center(child: CircularProgressIndicator()),
+              color: Colors.black.withOpacity(0.4),
+              child: const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ================= UI HELPERS =================
+
+  Widget _gradientBg() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF0F2027),
+            Color(0xFF203A43),
+            Color(0xFF2C5364),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _glassCard({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: Colors.white.withOpacity(0.12),
+        border: Border.all(color: Colors.white.withOpacity(0.25)),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _questionPreview(Map<String, dynamic> q, int index) {
+    final options = List<String>.from(q['options']);
+    final correct = q['correctIndex'];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: Colors.white.withOpacity(0.12),
+        border: Border.all(color: Colors.white.withOpacity(0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Q$index. ${q['question']}",
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          for (int i = 0; i < options.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                "${i + 1}. ${options[i]}",
+                style: TextStyle(
+                  color: i == correct
+                      ? Colors.greenAccent
+                      : Colors.white70,
+                ),
+              ),
             ),
         ],
       ),

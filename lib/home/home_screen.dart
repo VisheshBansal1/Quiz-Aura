@@ -38,51 +38,111 @@ class _HomeScreenState extends State<HomeScreen> {
         return true;
       },
       child: Scaffold(
+        extendBody: true,
+        backgroundColor: Colors.transparent,
+
+        // ===== APP BAR =====
         appBar: AppBar(
-          title: Text(_titles[_index]),
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          title: Text(
+            _titles[_index],
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
+            ),
+          ),
           actions: [
             IconButton(
               icon: const Icon(Icons.settings),
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => const SettingsScreen(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
                 );
               },
             ),
           ],
+          flexibleSpace: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF0F2027),
+                  Color(0xFF203A43),
+                  Color(0xFF2C5364),
+                ],
+              ),
+            ),
+          ),
         ),
 
-        // ✅ Keeps state alive
-        body: IndexedStack(
-          index: _index,
-          children: _pages,
-        ),
+        // ===== BODY =====
+        body: IndexedStack(index: _index, children: _pages),
 
-        bottomNavigationBar: BottomNavigationBar(
-          currentIndex: _index,
-          type: BottomNavigationBarType.fixed, // 🔥 IMPORTANT (4 items)
-          onTap: (i) {
-            if (i != _index) {
-              setState(() => _index = i);
-            }
-          },
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home),
-              label: "Home",
+        // ===== FLOATING CREATE QUIZ BUTTON =====
+        floatingActionButton: _index == 0
+            ? FloatingActionButton.extended(
+                backgroundColor: Colors.white.withOpacity(0.95),
+                foregroundColor: Colors.black,
+                elevation: 8,
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AdminDashboardScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.add),
+                label: const Text(
+                  "Create Quiz",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              )
+            : null,
+
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+
+        // ===== BOTTOM NAV BAR =====
+        bottomNavigationBar: Container(
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            color: Colors.white.withOpacity(0.12),
+            border: Border.all(color: Colors.white.withOpacity(0.25)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BottomNavigationBar(
+              currentIndex: _index,
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              type: BottomNavigationBarType.fixed,
+              selectedItemColor: Colors.white,
+              unselectedItemColor: Colors.white60,
+              onTap: (i) {
+                if (i != _index) {
+                  setState(() => _index = i);
+                }
+              },
+              items: const [
+                BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.history),
+                  label: "History",
+                ),
+              ],
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.history),
-              label: "History",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.add_box),
-              label: "Create",
-            ),
-          ],
+          ),
         ),
       ),
     );

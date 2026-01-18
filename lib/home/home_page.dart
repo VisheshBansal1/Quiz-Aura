@@ -9,115 +9,136 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('topics')
-          .where('isActive', isEqualTo: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        // ⏳ Loading
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
+        ),
+      ),
+      child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance
+            .collection('topics')
+            .where('isActive', isEqualTo: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          // ⏳ Loading
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            );
+          }
 
-        // ❌ Error
-        if (snapshot.hasError) {
-          return const Center(
-            child: Text("Failed to load quiz categories"),
-          );
-        }
+          // ❌ Error
+          if (snapshot.hasError) {
+            return const Center(
+              child: Text(
+                "Failed to load quiz categories",
+                style: TextStyle(color: Colors.white70),
+              ),
+            );
+          }
 
-        final docs = snapshot.data?.docs ?? [];
+          final docs = snapshot.data?.docs ?? [];
 
-        // 📭 Empty state
-        if (docs.isEmpty) {
-          return const Center(
-            child: Text(
-              "No quiz categories available",
-              style: TextStyle(fontSize: 16),
+          // 📭 Empty
+          if (docs.isEmpty) {
+            return const Center(
+              child: Text(
+                "No quiz categories available",
+                style: TextStyle(fontSize: 16, color: Colors.white70),
+              ),
+            );
+          }
+
+          return GridView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: docs.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 16,
+              crossAxisSpacing: 16,
+              childAspectRatio: 1.05,
             ),
-          );
-        }
+            itemBuilder: (context, i) {
+              final data = docs[i].data();
 
-        return GridView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: docs.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            mainAxisSpacing: 16,
-            crossAxisSpacing: 16,
-            childAspectRatio: 1.05,
-          ),
-          itemBuilder: (context, i) {
-            final data = docs[i].data();
+              final String title = data['title'] ?? 'Quiz';
+              final String subtitle = data['subtitle'] ?? '';
+              final String iconName = data['icon'] ?? 'quiz';
 
-            final String title = data['title'] ?? 'Quiz';
-            final String subtitle = data['subtitle'] ?? '';
-            final String iconName = data['icon'] ?? 'quiz';
+              final icon = TopicIconMapper.fromString(iconName);
 
-            final icon = TopicIconMapper.fromString(iconName);
-
-            return InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => QuizListScreen(topic: title),
+              return InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => QuizListScreen(topic: title),
+                    ),
+                  );
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    color: Colors.white.withOpacity(0.12),
+                    border: Border.all(color: Colors.white.withOpacity(0.25)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.25),
+                        blurRadius: 16,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
                   ),
-                );
-              },
-              child: Card(
-                elevation: 3,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      CircleAvatar(
-                        radius: 28,
-                        backgroundColor: Theme.of(context)
-                            .colorScheme
-                            .primaryContainer,
-                        child: Icon(
-                          icon,
-                          size: 28,
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onPrimaryContainer,
+                      // ===== Icon Container =====
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withOpacity(0.18),
                         ),
+                        child: Icon(icon, size: 30, color: Colors.white),
                       ),
-                      const SizedBox(height: 12),
+
+                      const SizedBox(height: 14),
+
+                      // ===== Title =====
                       Text(
                         title,
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
                       ),
+
                       if (subtitle.isNotEmpty) ...[
                         const SizedBox(height: 6),
                         Text(
                           subtitle,
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 12,
-                            color: Colors.grey.shade600,
+                            color: Colors.white70,
                           ),
                         ),
                       ],
                     ],
                   ),
                 ),
-              ),
-            );
-          },
-        );
-      },
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }

@@ -11,7 +11,7 @@ class QuizResultScreen extends StatelessWidget {
   final int percentage;
   final Map<String, int> answers;
   final List<QueryDocumentSnapshot<Map<String, dynamic>>> questions;
-  final DateTime endAt; // 🔥 REQUIRED
+  final DateTime endAt;
 
   const QuizResultScreen({
     super.key,
@@ -26,120 +26,202 @@ class QuizResultScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final passed = percentage >= 60;
+    final bool passed = percentage >= 60;
     final bool quizEnded = DateTime.now().isAfter(endAt);
 
     return WillPopScope(
-      onWillPop: () async => false, // 🔒 block system back
+      onWillPop: () async => false,
       child: Scaffold(
+        backgroundColor: Colors.black,
         appBar: AppBar(
           title: const Text("Quiz Result"),
           automaticallyImplyLeading: false,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          flexibleSpace: _gradientBg(),
         ),
-        body: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                passed ? Icons.emoji_events : Icons.error_outline,
-                size: 72,
-                color: passed ? Colors.green : Colors.red,
-              ),
+        body: Stack(
+          children: [
+            _gradientBg(),
 
-              const SizedBox(height: 16),
-
-              Text(
-                passed ? "Congratulations!" : "Better luck next time",
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-
-              const SizedBox(height: 24),
-
-              Text(
-                "$score / $total",
-                style: const TextStyle(
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              Text(
-                "$percentage%",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: passed ? Colors.green : Colors.red,
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // ================= ANSWER REVIEW =================
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.visibility),
-                  label: Text(
-                    quizEnded
-                        ? "Review Answers"
-                        : "Review available after quiz ends",
-                  ),
-                  onPressed: quizEnded
-                      ? () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => AnswerReviewScreen(
-                                quizId: quizId,
-                                answers: answers, // ✅ Map<String, int>
-                              ),
-                            ),
-                          );
-                        }
-                      : null, // 🔒 BLOCK EARLY REVIEW
-                ),
-              ),
-
-              SizedBox(height: 12),
-
-              ElevatedButton.icon(
-                icon: const Icon(Icons.leaderboard),
-                label: const Text("View Leaderboard"),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => QuizLeaderboardScreen(
-                        quizId: quizId,
-                        quizTitle: "Quiz",
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: _glassCard(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // ===== ICON =====
+                      Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: passed
+                              ? Colors.greenAccent.withOpacity(0.2)
+                              : Colors.redAccent.withOpacity(0.2),
+                        ),
+                        child: Icon(
+                          passed
+                              ? Icons.emoji_events
+                              : Icons.error_outline,
+                          size: 56,
+                          color: passed
+                              ? Colors.greenAccent
+                              : Colors.redAccent,
+                        ),
                       ),
-                    ),
-                  );
-                },
-              ),
 
-              const SizedBox(height: 12),
+                      const SizedBox(height: 20),
 
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  child: const Text("Back to Home"),
-                  onPressed: () {
-                    Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute(builder: (_) => const HomeScreen()),
-                      (_) => false,
-                    );
-                  },
+                      // ===== TITLE =====
+                      Text(
+                        passed
+                            ? "Congratulations!"
+                            : "Better luck next time",
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // ===== SCORE =====
+                      Text(
+                        "$score / $total",
+                        style: const TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+
+                      const SizedBox(height: 6),
+
+                      Text(
+                        "$percentage%",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: passed
+                              ? Colors.greenAccent
+                              : Colors.redAccent,
+                        ),
+                      ),
+
+                      const SizedBox(height: 28),
+
+                      // ===== REVIEW =====
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.visibility),
+                          label: Text(
+                            quizEnded
+                                ? "Review Answers"
+                                : "Review available after quiz ends",
+                          ),
+                          onPressed: quizEnded
+                              ? () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => AnswerReviewScreen(
+                                        quizId: quizId,
+                                        answers: answers,
+                                      ),
+                                    ),
+                                  );
+                                }
+                              : null,
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // ===== LEADERBOARD =====
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.leaderboard),
+                          label: const Text("View Leaderboard"),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    QuizLeaderboardScreen(
+                                  quizId: quizId,
+                                  quizTitle: "Quiz",
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // ===== HOME =====
+                      SizedBox(
+                        width: double.infinity,
+                        height: 46,
+                        child: OutlinedButton(
+                          child: const Text("Back to Home"),
+                          onPressed: () {
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) =>
+                                      const HomeScreen()),
+                              (_) => false,
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  // ================= UI HELPERS =================
+
+  static Widget _gradientBg() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF0F2027),
+            Color(0xFF203A43),
+            Color(0xFF2C5364),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Widget _glassCard({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        color: Colors.white.withOpacity(0.12),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.25),
+        ),
+      ),
+      child: child,
     );
   }
 }

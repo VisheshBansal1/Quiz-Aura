@@ -13,158 +13,243 @@ class QuizListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(topic)),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('quizzes')
-            .where('topic', isEqualTo: topic)
-            .where('isActive', isEqualTo: true)
-            .orderBy('startAt')
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: Text(topic),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: _gradientBg(),
+      ),
+      body: Stack(
+        children: [
+          _gradientBg(),
 
-          if (snapshot.hasError) {
-            return const Center(child: Text("Failed to load quizzes"));
-          }
-
-          final docs = snapshot.data?.docs ?? [];
-
-          if (docs.isEmpty) {
-            return const Center(
-              child: Text(
-                "No quizzes available for this topic",
-                style: TextStyle(fontSize: 16),
-              ),
-            );
-          }
-
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: docs.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (context, i) {
-              final doc = docs[i];
-              final data = doc.data();
-
-              final String title = data['title'] ?? 'Quiz';
-              final bool isPrivate = data['type'] == 'private';
-
-              final DateTime startAt = (data['startAt'] as Timestamp).toDate();
-              final DateTime endAt = (data['endAt'] as Timestamp).toDate();
-
-              final DateTime now = DateTime.now();
-
-              String statusText;
-              Color statusColor;
-
-              if (now.isAfter(endAt)) {
-                statusText = "Quiz ended";
-                statusColor = Colors.grey;
-              } else if (now.isBefore(startAt)) {
-                statusText = "Starts at ${_formatTime(startAt)}";
-                statusColor = Colors.orange;
-              } else {
-                statusText = "Live now";
-                statusColor = Colors.green;
+          StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: FirebaseFirestore.instance
+                .collection('quizzes')
+                .where('topic', isEqualTo: topic)
+                .where('isActive', isEqualTo: true)
+                .orderBy('startAt')
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                );
               }
 
-              return Card(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: ListTile(
-                  title: Text(
-                    title,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+              if (snapshot.hasError) {
+                return const Center(
+                  child: Text(
+                    "Failed to load quizzes",
+                    style: TextStyle(color: Colors.white70),
                   ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        isPrivate
-                            ? "Private quiz (join code required)"
-                            : "Public quiz",
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isPrivate ? Colors.redAccent : Colors.blue,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        statusText,
-                        style: TextStyle(fontSize: 12, color: statusColor),
-                      ),
-                    ],
-                  ),
-                  trailing: Icon(
-                    isPrivate ? Icons.lock : Icons.play_arrow,
-                    color: statusColor,
-                  ),
-                  onTap: () {
-                    // 🔐 PRIVATE QUIZ
-                    if (isPrivate) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const JoinQuizScreen(),
-                        ),
-                      );
-                      return;
-                    }
+                );
+              }
 
-                    // ⛔ QUIZ ENDED
-                    if (now.isAfter(endAt)) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => QuizEndedScreen(quizTitle: title),
-                        ),
-                      );
-                      return;
-                    }
+              final docs = snapshot.data?.docs ?? [];
 
-                    // ⏳ QUIZ NOT STARTED → RULES
-                    // ⏳ QUIZ NOT STARTED → RULES
-                    if (now.isBefore(startAt)) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => QuizRulesScreen(
-                            startAt: startAt,
-                            onConfirmedStart: () {
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => QuizAttemptScreen(
-                                    quizId: doc.id,
-                                    endAt: endAt,
+              if (docs.isEmpty) {
+                return const Center(
+                  child: Text(
+                    "No quizzes available for this topic",
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                );
+              }
+
+              return ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: docs.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                itemBuilder: (context, i) {
+                  final doc = docs[i];
+                  final data = doc.data();
+
+                  final String title = data['title'] ?? 'Quiz';
+                  final bool isPrivate = data['type'] == 'private';
+
+                  final DateTime startAt =
+                      (data['startAt'] as Timestamp).toDate();
+                  final DateTime endAt =
+                      (data['endAt'] as Timestamp).toDate();
+
+                  final DateTime now = DateTime.now();
+
+                  String statusText;
+                  Color statusColor;
+                  IconData statusIcon;
+
+                  if (now.isAfter(endAt)) {
+                    statusText = "Quiz ended";
+                    statusColor = Colors.grey;
+                    statusIcon = Icons.lock_clock;
+                  } else if (now.isBefore(startAt)) {
+                    statusText = "Starts at ${_formatTime(startAt)}";
+                    statusColor = Colors.orangeAccent;
+                    statusIcon = Icons.schedule;
+                  } else {
+                    statusText = "Live now";
+                    statusColor = Colors.greenAccent;
+                    statusIcon = Icons.play_arrow;
+                  }
+
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () {
+                      // 🔐 PRIVATE QUIZ
+                      if (isPrivate) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const JoinQuizScreen(),
+                          ),
+                        );
+                        return;
+                      }
+
+                      // ⛔ QUIZ ENDED
+                      if (now.isAfter(endAt)) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                QuizEndedScreen(quizTitle: title),
+                          ),
+                        );
+                        return;
+                      }
+
+                      // ⏳ QUIZ NOT STARTED → RULES
+                      if (now.isBefore(startAt)) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => QuizRulesScreen(
+                              startAt: startAt,
+                              onConfirmedStart: () {
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => QuizAttemptScreen(
+                                      quizId: doc.id,
+                                      endAt: endAt,
+                                    ),
                                   ),
-                                ),
-                              );
-                            },
+                                );
+                              },
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+
+                      // ✅ QUIZ LIVE → START
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => QuizAttemptScreen(
+                            quizId: doc.id,
+                            endAt: endAt,
                           ),
                         ),
                       );
-                      return;
-                    }
-
-                    // ✅ QUIZ LIVE → START
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            QuizAttemptScreen(quizId: doc.id, endAt: endAt),
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        color: Colors.white.withOpacity(0.12),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.25),
+                        ),
                       ),
-                    );
-                  },
-                ),
+                      child: Row(
+                        children: [
+                          // ===== STATUS ICON =====
+                          Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: statusColor.withOpacity(0.25),
+                              border: Border.all(color: statusColor),
+                            ),
+                            child: Icon(
+                              statusIcon,
+                              color: statusColor,
+                            ),
+                          ),
+
+                          const SizedBox(width: 14),
+
+                          // ===== INFO =====
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  title,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  isPrivate
+                                      ? "Private quiz (join code required)"
+                                      : "Public quiz",
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isPrivate
+                                        ? Colors.redAccent
+                                        : Colors.blueAccent,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  statusText,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: statusColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const Icon(
+                            Icons.chevron_right,
+                            color: Colors.white54,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               );
             },
-          );
-        },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ================= HELPERS =================
+  static Widget _gradientBg() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF0F2027),
+            Color(0xFF203A43),
+            Color(0xFF2C5364),
+          ],
+        ),
       ),
     );
   }

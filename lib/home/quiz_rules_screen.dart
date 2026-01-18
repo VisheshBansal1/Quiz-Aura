@@ -37,6 +37,9 @@ class _QuizRulesScreenState extends State<QuizRulesScreen> {
 
   void _updateRemaining() {
     final diff = widget.startAt.difference(DateTime.now());
+
+    if (!mounted) return;
+
     if (diff.isNegative) {
       _timer?.cancel();
       setState(() => remaining = Duration.zero);
@@ -62,7 +65,7 @@ class _QuizRulesScreenState extends State<QuizRulesScreen> {
         content: const Text(
           "• Timer will start immediately\n"
           "• You cannot go back\n"
-          "• Leaving app may submit quiz\n\n"
+          "• Leaving the app may submit the quiz\n\n"
           "Continue?",
         ),
         actions: [
@@ -80,8 +83,8 @@ class _QuizRulesScreenState extends State<QuizRulesScreen> {
 
     if (ok == true && mounted) {
       setState(() => _starting = true);
-      Navigator.pop(context); // remove rules screen
-      widget.onConfirmedStart(); // start quiz
+      Navigator.pop(context);
+      widget.onConfirmedStart();
     }
   }
 
@@ -90,57 +93,142 @@ class _QuizRulesScreenState extends State<QuizRulesScreen> {
     final canStart = remaining == Duration.zero;
 
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
         title: const Text("Quiz Rules"),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+
+        flexibleSpace: _gradientBg(),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Quiz Rules",
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            const Text("• No back navigation"),
-            const Text("• Timer based quiz"),
-            const Text("• Auto submit on timeout"),
-            const SizedBox(height: 24),
-            const Divider(),
-            const SizedBox(height: 16),
-            Center(
-              child: Column(
-                children: [
-                  Text(
-                    canStart ? "Quiz is live" : "Quiz starts in",
-                    style: const TextStyle(fontSize: 16),
+      body: Stack(
+        children: [
+          _gradientBg(),
+    
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ===== RULES CARD =====
+                _glassCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        "Rules",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 12),
+                      Text("• No back navigation",
+                          style: TextStyle(color: Colors.white70)),
+                      Text("• Timer based quiz",
+                          style: TextStyle(color: Colors.white70)),
+                      Text("• Auto submit on timeout",
+                          style: TextStyle(color: Colors.white70)),
+                      Text("• Leaving app may submit quiz",
+                          style: TextStyle(color: Colors.white70)),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    canStart ? "READY" : _format(remaining),
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: canStart ? Colors.green : Colors.red,
+                ),
+
+                const SizedBox(height: 28),
+
+                // ===== COUNTDOWN =====
+                Center(
+                  child: _glassCard(
+                    child: Column(
+                      children: [
+                        Text(
+                          canStart
+                              ? "Quiz is live"
+                              : "Quiz starts in",
+                          style: const TextStyle(
+                            color: Colors.white70,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          canStart ? "READY" : _format(remaining),
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: canStart
+                                ? Colors.greenAccent
+                                : Colors.redAccent,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
-            const Spacer(),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: canStart ? _confirmAndStart : null,
-                child: Text(
-                  canStart ? "Join Quiz" : "Waiting for start time",
                 ),
-              ),
+    
+                const Spacer(),
+
+                // ===== START BUTTON =====
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: canStart ? _confirmAndStart : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: Text(
+                      canStart
+                          ? "Join Quiz"
+                          : "Waiting for start time",
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ================= UI HELPERS =================
+
+  static Widget _gradientBg() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF0F2027),
+            Color(0xFF203A43),
+            Color(0xFF2C5364),
           ],
         ),
       ),
+    );
+  }
+
+  static Widget _glassCard({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: Colors.white.withOpacity(0.12),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.25),
+        ),
+      ),
+      child: child,
     );
   }
 }

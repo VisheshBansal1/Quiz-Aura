@@ -33,115 +33,228 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
 
     return Scaffold(
+      backgroundColor: Colors.black,
       floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 8,
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (_) => const CreateQuizScreen(),
-            ),
+            MaterialPageRoute(builder: (_) => const CreateQuizScreen()),
           );
         },
         icon: const Icon(Icons.add),
-        label: const Text("Create Quiz"),
+        label: const Text(
+          "Create Quiz",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
 
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('quizzes')
-            .orderBy('createdAt', descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: Stack(
+        children: [
+          // ===== BACKGROUND =====
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF0F2027),
+                  Color(0xFF203A43),
+                  Color(0xFF2C5364),
+                ],
+              ),
+            ),
+          ),
 
-          if (snapshot.hasError) {
-            return const Center(child: Text("Something went wrong"));
-          }
+          SafeArea(
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('quizzes')
+                  .orderBy('createdAt', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  );
+                }
 
-          final quizzes = snapshot.data?.docs ?? [];
+                if (snapshot.hasError) {
+                  return const Center(
+                    child: Text(
+                      "Something went wrong",
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  );
+                }
 
-          if (quizzes.isEmpty) {
-            return const Center(child: Text("No quizzes created yet"));
-          }
+                final quizzes = snapshot.data?.docs ?? [];
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: quizzes.length,
-            itemBuilder: (context, i) {
-              final doc = quizzes[i];
-              final data = doc.data();
+                if (quizzes.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      "No quizzes created yet",
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  );
+                }
 
-              final title = data['title'] ?? 'Quiz';
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                  itemCount: quizzes.length,
+                  itemBuilder: (context, i) {
+                    final doc = quizzes[i];
+                    final data = doc.data();
 
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ListTile(
-                  title: Text(
-                    title,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("Topic: ${data['topic'] ?? 'N/A'}"),
-                      Text("Join Code: ${data['joinCode'] ?? 'N/A'}"),
-                    ],
-                  ),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (value) {
-                      if (value == 'add') {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                AddQuestionScreen(quizId: doc.id),
+                    final title = data['title'] ?? 'Quiz';
+                    final topic = data['topic'] ?? 'N/A';
+                    final joinCode = data['joinCode'];
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        color: Colors.white.withOpacity(0.12),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.25),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 16,
+                            offset: const Offset(0, 8),
                           ),
-                        );
-                      } 
-                      else if (value == 'ai') {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                AiGenerateQuestionsScreen(quizId: doc.id),
-                          ),
-                        );
-                      } 
-                      else if (value == 'leaderboard') {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => QuizLeaderboardScreen(
-                              quizId: doc.id,
-                              quizTitle: title,
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // ===== TITLE =====
+                          Text(
+                            title,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
                             ),
                           ),
-                        );
-                      }
-                    },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(
-                        value: 'add',
-                        child: Text("Add Question"),
+
+                          const SizedBox(height: 6),
+
+                          // ===== META =====
+                          Text(
+                            "Topic: $topic",
+                            style: const TextStyle(color: Colors.white70),
+                          ),
+
+                          if (joinCode != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              "Join Code: $joinCode",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+
+                          const SizedBox(height: 12),
+
+                          // ===== ACTIONS =====
+                          Row(
+                            children: [
+                              _actionButton(
+                                icon: Icons.add,
+                                label: "Add",
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          AddQuestionScreen(quizId: doc.id),
+                                    ),
+                                  );
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              _actionButton(
+                                icon: Icons.auto_awesome,
+                                label: "AI",
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => AiGenerateQuestionsScreen(
+                                        quizId: doc.id,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              const Spacer(),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.leaderboard,
+                                  color: Colors.white,
+                                ),
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => QuizLeaderboardScreen(
+                                        quizId: doc.id,
+                                        quizTitle: title,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                      PopupMenuItem(
-                        value: 'ai',
-                        child: Text("Generate with AI"),
-                      ),
-                      PopupMenuDivider(),
-                      PopupMenuItem(
-                        value: 'leaderboard',
-                        child: Text("View Leaderboard"),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          );
-        },
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _actionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          color: Colors.white.withOpacity(0.18),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: Colors.white),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
