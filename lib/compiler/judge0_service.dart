@@ -1,43 +1,52 @@
-// import 'dart:convert';
-// import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
-// class Judge0Service {
-//   static const _baseUrl = 'https://judge0-ce.p.rapidapi.com';
-//   static const _apiKey = 'YOUR_RAPIDAPI_KEY';
+class Judge0Service {
+  // static const String _baseUrl = 'http://192.168.1.18:2358';
+  static const String _baseUrl = 'http://127.0.0.1:2358';
 
-//   static const _headers = {
-//     'Content-Type': 'application/json',
-//     'X-RapidAPI-Key': _apiKey,
-//     'X-RapidAPI-Host': 'judge0-ce.p.rapidapi.com',
-//   };
 
-//   static int languageId(String lang) {
-//     switch (lang) {
-//       case 'python':
-//         return 71;
-//       case 'cpp':
-//         return 54;
-//       default:
-//         throw Exception("Unsupported language");
-//     }
-//   }
+  static Future<String> submit({
+    required String code,
+    required String input,
+    required int languageId,
+  }) async {
+    final res = await http.post(
+      Uri.parse('$_baseUrl/submissions'),
+      headers: const {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: jsonEncode({
+        'source_code': code,
+        'stdin': input,
+        'language_id': languageId,
+        'base64_encoded': false,
+      }),
+    );
 
-//   static Future<String> submit({
-//     required String code,
-//     required String input,
-//     required String language,
-//   }) async {
-//     final res = await http.post(
-//       Uri.parse('$_baseUrl/submissions?wait=true'),
-//       headers: _headers,
-//       body: jsonEncode({
-//         'source_code': code,
-//         'language_id': languageId(language),
-//         'stdin': input,
-//       }),
-//     );
+    if (res.statusCode != 201) {
+      throw Exception('Submit failed: ${res.body}');
+    }
 
-//     final data = jsonDecode(res.body);
-//     return (data['stdout'] ?? '').toString().trim();
-//   }
-// }
+    return jsonDecode(res.body)['token'];
+  }
+
+  static Future<Map<String, dynamic>> getResult(String token) async {
+    final res = await http.get(
+      Uri.parse(
+        '$_baseUrl/submissions/$token?base64_encoded=false&fields=*',
+      ),
+      headers: const {
+        'Accept': 'application/json',
+        'Connection': 'close',
+      },
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception('Result failed: ${res.body}');
+    }
+
+    return jsonDecode(res.body);
+  }
+}

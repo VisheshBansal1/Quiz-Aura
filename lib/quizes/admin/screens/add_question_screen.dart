@@ -84,9 +84,15 @@ class _AddQuestionScreenState extends State<AddQuestionScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text("Add Question"),
+        title: const Text("Add Question", style: TextStyle(color: Colors.white),),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          onPressed: () {
+            Navigator.pop(context);
+          },
+          icon: Icon(Icons.arrow_back, color: Colors.white,),
+        ),
         flexibleSpace: _gradientBg(),
       ),
       body: Stack(

@@ -16,11 +16,17 @@ class QuizLeaderboardScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text("Leaderboard • $quizTitle"),
+        title: Text("Leaderboard • $quizTitle", style: TextStyle(color: Colors.white),),
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
         flexibleSpace: _gradientBg(),
+        leading: IconButton(
+          onPressed: () {
+            Navigator.pop(context);
+          },
+          icon: Icon(Icons.arrow_back, color: Colors.white,),
+        ),
       ),
       body: Stack(
         children: [

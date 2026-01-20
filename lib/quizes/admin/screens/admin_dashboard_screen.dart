@@ -33,6 +33,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
 
     return Scaffold(
+      appBar: AppBar(
+        title: const Text("Admin Dashboard", style: TextStyle(color: Colors.white),),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: _gradientBg(),
+        leading: IconButton(
+          onPressed: () {
+            Navigator.pop(context);
+          },
+          icon: Icon(Icons.arrow_back, color: Colors.white,),
+        ),
+        
+      ),
+      
       backgroundColor: Colors.black,
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: Colors.white,
@@ -68,6 +82,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
             ),
           ),
+
+          
 
           SafeArea(
             child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -292,3 +308,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 }
+// ================= WIDGET BUILDERS =================
+
+  Widget _gradientBg() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF0F2027),
+            Color(0xFF203A43),
+            Color(0xFF2C5364),
+          ],
+        ),
+      ),
+    );
+  }

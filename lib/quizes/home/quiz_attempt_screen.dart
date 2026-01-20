@@ -29,7 +29,7 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
   Timer? _timer;
 
   late Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
-      _questionsFuture;
+  _questionsFuture;
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _questions = [];
 
   late final DateTime _startedAt;
@@ -56,7 +56,7 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
 
   // ================= LOAD QUESTIONS =================
   Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
-      _loadQuestions() async {
+  _loadQuestions() async {
     final snap = await FirebaseFirestore.instance
         .collection('quizzes')
         .doc(widget.quizId)
@@ -120,8 +120,7 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
-                    child:
-                        CircularProgressIndicator(color: Colors.white),
+                    child: CircularProgressIndicator(color: Colors.white),
                   );
                 }
 
@@ -147,13 +146,11 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
                       // ===== TIMER =====
                       _glassCard(
                         child: Row(
-                          mainAxisAlignment:
-                              MainAxisAlignment.spaceBetween,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
                               "Time Left",
-                              style: const TextStyle(
-                                  color: Colors.white70),
+                              style: const TextStyle(color: Colors.white70),
                             ),
                             Text(
                               "${remainingSeconds ~/ 60}:${(remainingSeconds % 60).toString().padLeft(2, '0')}",
@@ -171,13 +168,11 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
 
                       // ===== PROGRESS =====
                       LinearProgressIndicator(
-                        value:
-                            (currentIndex + 1) / _questions.length,
-                        backgroundColor:
-                            Colors.white.withOpacity(0.2),
-                        valueColor:
-                            const AlwaysStoppedAnimation<Color>(
-                                Colors.greenAccent),
+                        value: (currentIndex + 1) / _questions.length,
+                        backgroundColor: Colors.white.withOpacity(0.2),
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          Colors.greenAccent,
+                        ),
                       ),
 
                       const SizedBox(height: 16),
@@ -211,8 +206,7 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
                         child: ListView.builder(
                           itemCount: options.length,
                           itemBuilder: (_, i) {
-                            final selected =
-                                answers[questionId] == i;
+                            final selected = answers[questionId] == i;
 
                             return _optionTile(
                               text: options[i],
@@ -237,38 +231,30 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
                               child: OutlinedButton(
                                 onPressed: submitting
                                     ? null
-                                    : () => setState(
-                                        () => currentIndex--),
-                                child:
-                                    const Text("Previous"),
+                                    : () => setState(() => currentIndex--),
+                                child: const Text("Previous"),
                               ),
                             ),
-                          if (currentIndex > 0)
-                            const SizedBox(width: 12),
+                          if (currentIndex > 0) const SizedBox(width: 12),
                           Expanded(
                             child: ElevatedButton(
                               onPressed: submitting
                                   ? null
                                   : () {
-                                      if (!answers
-                                          .containsKey(questionId)) {
-                                        _error(
-                                            "Please select an option");
+                                      if (!answers.containsKey(questionId)) {
+                                        _error("Please select an option");
                                         return;
                                       }
 
                                       if (currentIndex ==
-                                          _questions.length -
-                                              1) {
+                                          _questions.length - 1) {
                                         _submitQuiz();
                                       } else {
-                                        setState(
-                                            () => currentIndex++);
+                                        setState(() => currentIndex++);
                                       }
                                     },
                               child: Text(
-                                currentIndex ==
-                                        _questions.length - 1
+                                currentIndex == _questions.length - 1
                                     ? "Submit"
                                     : "Next",
                               ),
@@ -286,8 +272,7 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
               Container(
                 color: Colors.black.withOpacity(0.4),
                 child: const Center(
-                  child: CircularProgressIndicator(
-                      color: Colors.white),
+                  child: CircularProgressIndicator(color: Colors.white),
                 ),
               ),
           ],
@@ -310,8 +295,7 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
         final correctIndex = q['correctIndex'] as int?;
         final selectedIndex = answers[q.id];
 
-        if (correctIndex != null &&
-            selectedIndex == correctIndex) {
+        if (correctIndex != null && selectedIndex == correctIndex) {
           score++;
         }
       }
@@ -322,53 +306,54 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
       final total = _questions.length;
       final percentage = ((score / total) * 100).round();
 
-      final int timeTakenSeconds =
-          DateTime.now().difference(_startedAt).inSeconds;
+      final int timeTakenSeconds = DateTime.now()
+          .difference(_startedAt)
+          .inSeconds;
 
-      await FirebaseFirestore.instance
+      // 🔥 SAVE ATTEMPT + ANSWERS
+      final docRef = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .collection('attempts')
           .add({
-        'quizId': widget.quizId,
-        'userId': user.uid,
-        'score': score,
-        'total': total,
-        'percentage': percentage,
-        'startedAt': _startedAt,
-        'attemptedAt': FieldValue.serverTimestamp(),
-        'timeTakenSeconds': timeTakenSeconds,
-        'autoSubmitted': auto,
-      });
+            'quizId': widget.quizId,
+            'userId': user.uid,
+            'score': score,
+            'total': total,
+            'percentage': percentage,
+            'answers': Map<String, int>.from(answers), // 🔥 REQUIRED
+            'startedAt': _startedAt,
+            'attemptedAt': FieldValue.serverTimestamp(),
+            'timeTakenSeconds': timeTakenSeconds,
+            'autoSubmitted': auto,
+          });
 
       if (!mounted) return;
 
+      // 🔥 NAVIGATE WITH attemptId
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (_) => QuizResultScreen(
             quizId: widget.quizId,
+            attemptId: docRef.id, // 🔥 IMPORTANT
             score: score,
             total: total,
             percentage: percentage,
-            answers: Map<String, int>.from(answers),
-            questions: List.from(_questions),
             endAt: widget.endAt,
           ),
         ),
       );
     } catch (e) {
       if (mounted) {
-        _error(
-            e.toString().replaceFirst('Exception: ', ''));
+        _error(e.toString().replaceFirst('Exception: ', ''));
         setState(() => submitting = false);
       }
     }
   }
 
   void _error(String msg) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   // ================= UI HELPERS =================
@@ -379,11 +364,7 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF0F2027),
-            Color(0xFF203A43),
-            Color(0xFF2C5364),
-          ],
+          colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
         ),
       ),
     );
@@ -395,9 +376,7 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         color: Colors.white.withOpacity(0.12),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.25),
-        ),
+        border: Border.all(color: Colors.white.withOpacity(0.25)),
       ),
       child: child,
     );
@@ -428,18 +407,10 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen> {
         child: Row(
           children: [
             Expanded(
-              child: Text(
-                text,
-                style: const TextStyle(
-                  color: Colors.white,
-                ),
-              ),
+              child: Text(text, style: const TextStyle(color: Colors.white)),
             ),
             if (selected)
-              const Icon(
-                Icons.check_circle,
-                color: Colors.greenAccent,
-              ),
+              const Icon(Icons.check_circle, color: Colors.greenAccent),
           ],
         ),
       ),

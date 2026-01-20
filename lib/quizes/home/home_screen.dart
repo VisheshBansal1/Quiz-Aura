@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quiz_app/compiler/coding_quiz_screen.dart';
 import 'package:quiz_app/quizes/admin/screens/admin_dashboard_screen.dart';
 
 import 'home_page.dart';
@@ -50,11 +51,12 @@ class _HomeScreenState extends State<HomeScreen> {
             style: const TextStyle(
               fontWeight: FontWeight.bold,
               letterSpacing: 0.5,
+              color: Colors.white
             ),
           ),
           actions: [
             IconButton(
-              icon: const Icon(Icons.settings),
+              icon: const Icon(Icons.settings, color: Colors.white,),
               onPressed: () {
                 Navigator.push(
                   context,

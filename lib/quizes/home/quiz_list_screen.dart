@@ -15,10 +15,16 @@ class QuizListScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text(topic),
+        title: Text(topic, style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.transparent,
         elevation: 0,
         flexibleSpace: _gradientBg(),
+        leading: IconButton(
+          onPressed: () {
+            Navigator.pop(context);
+          },
+          icon: Icon(Icons.arrow_back, color: Colors.white),
+        ),
       ),
       body: Stack(
         children: [
@@ -69,10 +75,9 @@ class QuizListScreen extends StatelessWidget {
                   final String title = data['title'] ?? 'Quiz';
                   final bool isPrivate = data['type'] == 'private';
 
-                  final DateTime startAt =
-                      (data['startAt'] as Timestamp).toDate();
-                  final DateTime endAt =
-                      (data['endAt'] as Timestamp).toDate();
+                  final DateTime startAt = (data['startAt'] as Timestamp)
+                      .toDate();
+                  final DateTime endAt = (data['endAt'] as Timestamp).toDate();
 
                   final DateTime now = DateTime.now();
 
@@ -113,8 +118,7 @@ class QuizListScreen extends StatelessWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) =>
-                                QuizEndedScreen(quizTitle: title),
+                            builder: (_) => QuizEndedScreen(quizTitle: title),
                           ),
                         );
                         return;
@@ -148,10 +152,8 @@ class QuizListScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => QuizAttemptScreen(
-                            quizId: doc.id,
-                            endAt: endAt,
-                          ),
+                          builder: (_) =>
+                              QuizAttemptScreen(quizId: doc.id, endAt: endAt),
                         ),
                       );
                     },
@@ -175,10 +177,7 @@ class QuizListScreen extends StatelessWidget {
                               color: statusColor.withOpacity(0.25),
                               border: Border.all(color: statusColor),
                             ),
-                            child: Icon(
-                              statusIcon,
-                              color: statusColor,
-                            ),
+                            child: Icon(statusIcon, color: statusColor),
                           ),
 
                           const SizedBox(width: 14),
@@ -186,8 +185,7 @@ class QuizListScreen extends StatelessWidget {
                           // ===== INFO =====
                           Expanded(
                             child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   title,
@@ -244,11 +242,7 @@ class QuizListScreen extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF0F2027),
-            Color(0xFF203A43),
-            Color(0xFF2C5364),
-          ],
+          colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
         ),
       ),
     );

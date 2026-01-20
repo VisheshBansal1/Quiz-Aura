@@ -1,149 +1,170 @@
-// import 'dart:async';
-// import 'package:flutter/material.dart';
-// import 'judge0_service.dart';
-// import 'language_constants.dart';
+import 'package:flutter/material.dart';
+import 'judge0_service.dart';
+import 'language_constants.dart';
 
-// class CodingQuizScreen extends StatefulWidget {
-//   const CodingQuizScreen({super.key});
+class CodingQuizScreen extends StatefulWidget {
+  const CodingQuizScreen({super.key});
 
-//   @override
-//   State<CodingQuizScreen> createState() => _CodingQuizScreenState();
-// }
+  @override
+  State<CodingQuizScreen> createState() => _CodingQuizScreenState();
+}
 
-// class _CodingQuizScreenState extends State<CodingQuizScreen> {
-//   final TextEditingController codeCtrl = TextEditingController();
-//   final TextEditingController inputCtrl = TextEditingController();
+class _CodingQuizScreenState extends State<CodingQuizScreen> {
+  final TextEditingController codeCtrl = TextEditingController();
+  final TextEditingController inputCtrl = TextEditingController();
 
-//   String selectedLang = "Python";
-//   bool running = false;
-//   String output = "";
+  late String selectedLang;
+  bool running = false;
+  String output = "";
 
-//   Future<void> runCode() async {
-//     if (running) return;
+  @override
+  void initState() {
+    super.initState();
+    selectedLang = languageIds.keys.first;
+  }
 
-//     setState(() {
-//       running = true;
-//       output = "Running...";
-//     });
+  // ===============================
+  // RUN CODE (NO POLLING)
+  // ===============================
+  Future<void> runCode() async {
+  if (running) return;
 
-//     try {
-//       final token = await Judge0Service.submitCode(
-//         sourceCode: codeCtrl.text,
-//         languageId: languageIds[selectedLang]!,
-//         stdin: inputCtrl.text,
-//       );
+  setState(() {
+    running = true;
+    output = "Running...";
+  });
 
-//       Map<String, dynamic> result;
+  try {
+    final token = await Judge0Service.submit(
+      code: codeCtrl.text,
+      input: inputCtrl.text,
+      languageId: languageIds[selectedLang]!,
+    );
 
-//       do {
-//         await Future.delayed(const Duration(seconds: 1));
-//         result = await Judge0Service.getResult(token);
-//       } while (result['status']['id'] <= 2);
+    await Future.delayed(const Duration(seconds: 2));
 
-//       setState(() {
-//         output = _formatResult(result);
-//       });
-//     } catch (e) {
-//       setState(() {
-//         output = "Error: $e";
-//       });
-//     } finally {
-//       setState(() => running = false);
-//     }
-//   }
+    final result = await Judge0Service.getResult(token);
 
-//   String _formatResult(Map<String, dynamic> r) {
-//     final status = r['status']['description'];
+    setState(() {
+      output = result['stdout']?.toString().trim() ?? 'No output';
+    });
+  } catch (e) {
+    setState(() {
+      output = "❌ Error: $e";
+    });
+  } finally {
+    running = false;
+  }
+}
 
-//     if (r['compile_output'] != null) {
-//       return "❌ Compilation Error\n\n${r['compile_output']}";
-//     }
 
-//     if (r['stderr'] != null) {
-//       return "❌ Runtime Error\n\n${r['stderr']}";
-//     }
+  // ===============================
+  // OUTPUT FORMATTER
+  // ===============================
+  String _formatResult(Map<String, dynamic> r) {
+    final statusId = r['status']?['id'];
+    final statusText = r['status']?['description'] ?? 'Unknown';
 
-//     return """
-// ✅ Status: $status
+    if (statusId == 6 && r['compile_output'] != null) {
+      return "❌ Compilation Error\n\n${_clean(r['compile_output'])}";
+    }
 
-// Output:
-// ${r['stdout'] ?? ''}
+    if ((statusId == 11 || statusId == 12) && r['stderr'] != null) {
+      return "❌ Runtime Error\n\n${_clean(r['stderr'])}";
+    }
 
-// Time: ${r['time']} sec
-// Memory: ${r['memory']} KB
-// """;
-//   }
+    if (statusId == 5) {
+      return "⏱️ Time Limit Exceeded";
+    }
 
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       appBar: AppBar(title: const Text("Coding Quiz Compiler")),
-//       body: Padding(
-//         padding: const EdgeInsets.all(16),
-//         child: Column(
-//           children: [
-//             DropdownButtonFormField<String>(
-//               value: selectedLang,
-//               items: languageIds.keys
-//                   .map(
-//                     (l) => DropdownMenuItem(
-//                       value: l,
-//                       child: Text(l),
-//                     ),
-//                   )
-//                   .toList(),
-//               onChanged: (v) => setState(() => selectedLang = v!),
-//               decoration: const InputDecoration(
-//                 labelText: "Language",
-//               ),
-//             ),
+    return """
+✅ Status: $statusText
 
-//             const SizedBox(height: 12),
+Output:
+${_clean(r['stdout'])}
 
-//             TextField(
-//               controller: codeCtrl,
-//               maxLines: 8,
-//               decoration: const InputDecoration(
-//                 labelText: "Source Code",
-//                 border: OutlineInputBorder(),
-//               ),
-//             ),
+Time: ${r['time']} sec
+Memory: ${r['memory']} KB
+""";
+  }
 
-//             const SizedBox(height: 12),
+  String _clean(String? text) {
+    if (text == null) return '';
+    return text.trim().replaceAll('\r\n', '\n');
+  }
 
-//             TextField(
-//               controller: inputCtrl,
-//               decoration: const InputDecoration(
-//                 labelText: "Input (stdin)",
-//                 border: OutlineInputBorder(),
-//               ),
-//             ),
+  @override
+  void dispose() {
+    codeCtrl.dispose();
+    inputCtrl.dispose();
+    super.dispose();
+  }
 
-//             const SizedBox(height: 16),
-
-//             SizedBox(
-//               width: double.infinity,
-//               child: ElevatedButton(
-//                 onPressed: runCode,
-//                 child: running
-//                     ? const CircularProgressIndicator(color: Colors.white)
-//                     : const Text("Run Code"),
-//               ),
-//             ),
-
-//             const SizedBox(height: 16),
-
-//             Expanded(
-//               child: SingleChildScrollView(
-//                 child: Text(
-//                   output,
-//                   style: const TextStyle(fontFamily: "monospace"),
-//                 ),
-//               ),
-//             ),
-//           ],
-//         ),
-//       ),
-//     );
-//   }
-// }
+  // ===============================
+  // UI
+  // ===============================
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Coding Quiz Compiler")),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            DropdownButtonFormField<String>(
+              value: selectedLang,
+              items: languageIds.keys
+                  .map((l) => DropdownMenuItem(value: l, child: Text(l)))
+                  .toList(),
+              onChanged: (v) => setState(() => selectedLang = v!),
+              decoration: const InputDecoration(labelText: "Language"),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: codeCtrl,
+              maxLines: 8,
+              decoration: const InputDecoration(
+                labelText: "Source Code",
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: inputCtrl,
+              decoration: const InputDecoration(
+                labelText: "Input (stdin)",
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: running ? null : runCode,
+                child: running
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text("Run Code"),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Text(
+                  output,
+                  style: const TextStyle(fontFamily: "monospace"),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

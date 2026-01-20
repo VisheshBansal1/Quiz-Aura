@@ -175,6 +175,18 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text("Create Quiz", style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.transparent,
+        leading: IconButton(
+          onPressed: () {
+            Navigator.pop(context);
+          },
+          icon: Icon(Icons.arrow_back, color: Colors.white,),
+        ),
+        elevation: 0,
+        flexibleSpace: _gradientBg(),
+      ),
       body: Stack(
         children: [
           // ===== BACKGROUND =====
@@ -522,6 +534,20 @@ Widget _glassInput({
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide.none,
+      ),
+    ),
+  );
+}
+
+// ================= WIDGET BUILDERS =================
+
+Widget _gradientBg() {
+  return Container(
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
       ),
     ),
   );

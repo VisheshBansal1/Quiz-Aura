@@ -68,12 +68,14 @@ class HistoryScreen extends StatelessWidget {
                 itemCount: docs.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 12),
                 itemBuilder: (context, i) {
-                  final data = docs[i].data();
+                  final attemptDoc = docs[i];
+                  final data = attemptDoc.data();
 
-                  final quizId = data['quizId'];
-                  final score = data['score'];
-                  final total = data['total'];
-                  final percentage = data['percentage'];
+                  final String attemptId = attemptDoc.id;
+                  final String quizId = data['quizId'];
+                  final int score = data['score'];
+                  final int total = data['total'];
+                  final int percentage = data['percentage'];
 
                   final ts = data['attemptedAt'] as Timestamp?;
                   final date = ts != null
@@ -114,16 +116,16 @@ class HistoryScreen extends StatelessWidget {
                         return;
                       }
 
+                      // ✅ CORRECT NAVIGATION
                       Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (_) => QuizResultScreen(
                             quizId: quizId,
+                            attemptId: attemptId,
                             score: score,
                             total: total,
                             percentage: percentage,
-                            answers: const {},
-                            questions: const [],
                             endAt: endAt,
                           ),
                         ),
@@ -164,7 +166,8 @@ class HistoryScreen extends StatelessWidget {
                           // ===== INFO =====
                           Expanded(
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   "Score: $score / $total",
