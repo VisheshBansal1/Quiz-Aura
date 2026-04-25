@@ -25,8 +25,7 @@ class BattleWaitingScreen extends StatefulWidget {
 class _BattleWaitingScreenState extends State<BattleWaitingScreen> {
   bool _navigated = false;
 
-  String get _inviteLink =>
-      BattleV2Service.buildInviteLink(widget.battleId);
+  String get _inviteLink => BattleV2Service.buildInviteLink(widget.battleId);
 
   void _copyLink() {
     Clipboard.setData(ClipboardData(text: _inviteLink));
@@ -61,28 +60,35 @@ class _BattleWaitingScreenState extends State<BattleWaitingScreen> {
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
-      onPopInvoked: (didPop) async {
+      onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
         final leave = await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
             backgroundColor: const Color(0xFF203A43),
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20)),
-            title: const Text('Cancel Battle?',
-                style: TextStyle(color: Colors.white)),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: const Text(
+              'Cancel Battle?',
+              style: TextStyle(color: Colors.white),
+            ),
             content: const Text(
-                'This will cancel the battle and your friend will not be able to join.',
-                style: TextStyle(color: Colors.white70)),
+              'This will cancel the battle and your friend will not be able to join.',
+              style: TextStyle(color: Colors.white70),
+            ),
             actions: [
               TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Stay',
-                      style: TextStyle(color: Colors.teal))),
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Stay', style: TextStyle(color: Colors.teal)),
+              ),
               TextButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Cancel Battle',
-                      style: TextStyle(color: Colors.redAccent))),
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text(
+                  'Cancel Battle',
+                  style: TextStyle(color: Colors.redAccent),
+                ),
+              ),
             ],
           ),
         );
@@ -93,8 +99,8 @@ class _BattleWaitingScreenState extends State<BattleWaitingScreen> {
         body: Stack(
           children: [
             Container(
-                decoration: const BoxDecoration(
-                    gradient: AppColors.mainGradient)),
+              decoration: const BoxDecoration(gradient: AppColors.mainGradient),
+            ),
             SafeArea(
               child: StreamBuilder<BattleV2Model>(
                 stream: BattleV2Service.battleStream(widget.battleId),
@@ -102,17 +108,15 @@ class _BattleWaitingScreenState extends State<BattleWaitingScreen> {
                   final battle = snap.data;
 
                   // Auto-navigate when opponent joins
-                  if (battle != null &&
-                      battle.isActive &&
-                      !_navigated) {
+                  if (battle != null && battle.isActive && !_navigated) {
                     _navigated = true;
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       if (mounted) {
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => BattleActiveScreen(
-                                battleId: widget.battleId),
+                            builder: (_) =>
+                                BattleActiveScreen(battleId: widget.battleId),
                           ),
                         );
                       }
@@ -121,9 +125,10 @@ class _BattleWaitingScreenState extends State<BattleWaitingScreen> {
 
                   if (battle?.status == BattleV2Status.cancelled) {
                     return const Center(
-                      child: Text('Battle cancelled',
-                          style: TextStyle(
-                              color: Colors.redAccent, fontSize: 16)),
+                      child: Text(
+                        'Battle cancelled',
+                        style: TextStyle(color: Colors.redAccent, fontSize: 16),
+                      ),
                     );
                   }
 
@@ -136,8 +141,10 @@ class _BattleWaitingScreenState extends State<BattleWaitingScreen> {
                         Row(
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.close,
-                                  color: Colors.white),
+                              icon: const Icon(
+                                Icons.close,
+                                color: Colors.white,
+                              ),
                               onPressed: _cancel,
                               tooltip: 'Cancel Battle',
                             ),
@@ -146,9 +153,10 @@ class _BattleWaitingScreenState extends State<BattleWaitingScreen> {
                                 'Waiting for Opponent',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold),
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                             const SizedBox(width: 48),
@@ -165,9 +173,10 @@ class _BattleWaitingScreenState extends State<BattleWaitingScreen> {
                         const Text(
                           'Your battle is ready!',
                           style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold),
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
 
                         const SizedBox(height: 8),
@@ -175,8 +184,7 @@ class _BattleWaitingScreenState extends State<BattleWaitingScreen> {
                         const Text(
                           'Share the invite link below with your friend.\nThe battle starts as soon as they join.',
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: Colors.white60, fontSize: 14),
+                          style: TextStyle(color: Colors.white60, fontSize: 14),
                         ),
 
                         const SizedBox(height: 32),
@@ -189,17 +197,19 @@ class _BattleWaitingScreenState extends State<BattleWaitingScreen> {
                               const Text(
                                 'Invite Link',
                                 style: TextStyle(
-                                    color: Colors.white54,
-                                    fontSize: 12,
-                                    letterSpacing: 1),
+                                  color: Colors.white54,
+                                  fontSize: 12,
+                                  letterSpacing: 1,
+                                ),
                               ),
                               const SizedBox(height: 8),
                               Text(
                                 _inviteLink,
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(
-                                    color: Colors.tealAccent,
-                                    fontSize: 13),
+                                  color: Colors.tealAccent,
+                                  fontSize: 13,
+                                ),
                               ),
                               const SizedBox(height: 16),
                               Row(
@@ -207,17 +217,18 @@ class _BattleWaitingScreenState extends State<BattleWaitingScreen> {
                                   Expanded(
                                     child: OutlinedButton.icon(
                                       onPressed: _copyLink,
-                                      icon: const Icon(Icons.copy,
-                                          size: 16),
+                                      icon: const Icon(Icons.copy, size: 16),
                                       label: const Text('Copy Link'),
                                       style: OutlinedButton.styleFrom(
                                         foregroundColor: Colors.white,
                                         side: const BorderSide(
-                                            color: Colors.white24),
+                                          color: Colors.white24,
+                                        ),
                                         shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(
-                                                    10)),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -225,17 +236,18 @@ class _BattleWaitingScreenState extends State<BattleWaitingScreen> {
                                   Expanded(
                                     child: OutlinedButton.icon(
                                       onPressed: _copyCode,
-                                      icon: const Icon(Icons.tag,
-                                          size: 16),
+                                      icon: const Icon(Icons.tag, size: 16),
                                       label: const Text('Copy Code'),
                                       style: OutlinedButton.styleFrom(
                                         foregroundColor: Colors.white,
                                         side: const BorderSide(
-                                            color: Colors.white24),
+                                          color: Colors.white24,
+                                        ),
                                         shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(
-                                                    10)),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -250,15 +262,19 @@ class _BattleWaitingScreenState extends State<BattleWaitingScreen> {
                         // Battle code (large)
                         GlassCard(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 16),
-                          backgroundColor:
-                              Colors.white.withOpacity(0.05),
+                            horizontal: 20,
+                            vertical: 16,
+                          ),
+                          backgroundColor: Colors.white.withOpacity(0.05),
                           child: Column(
                             children: [
-                              const Text('Battle Code',
-                                  style: TextStyle(
-                                      color: Colors.white54,
-                                      fontSize: 12)),
+                              const Text(
+                                'Battle Code',
+                                style: TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 12,
+                                ),
+                              ),
                               const SizedBox(height: 6),
                               Text(
                                 widget.battleId,
@@ -282,8 +298,9 @@ class _BattleWaitingScreenState extends State<BattleWaitingScreen> {
                           child: const Text(
                             'Cancel Battle',
                             style: TextStyle(
-                                color: Colors.redAccent,
-                                fontSize: 14),
+                              color: Colors.redAccent,
+                              fontSize: 14,
+                            ),
                           ),
                         ),
                       ],
@@ -318,9 +335,10 @@ class _PulsingIconState extends State<_PulsingIcon>
       vsync: this,
       duration: const Duration(seconds: 1),
     )..repeat(reverse: true);
-    _scale = Tween<double>(begin: 0.9, end: 1.1).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
-    );
+    _scale = Tween<double>(
+      begin: 0.9,
+      end: 1.1,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
   }
 
   @override
@@ -339,12 +357,9 @@ class _PulsingIconState extends State<_PulsingIcon>
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: Colors.teal.withOpacity(0.15),
-          border: Border.all(
-              color: Colors.teal.withOpacity(0.4), width: 2),
+          border: Border.all(color: Colors.teal.withOpacity(0.4), width: 2),
         ),
-        child: const Center(
-          child: Text('⚔️', style: TextStyle(fontSize: 44)),
-        ),
+        child: const Center(child: Text('⚔️', style: TextStyle(fontSize: 44))),
       ),
     );
   }

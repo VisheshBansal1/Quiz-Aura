@@ -4,6 +4,7 @@
 //          GoogleSignIn gets clientId on web only.
 // ============================================================
 
+import 'package:QuizSphere/ads/services/admob_service.dart';
 import 'package:QuizSphere/login/login_screen.dart';
 import 'package:QuizSphere/quizes/admin/screens/admin_daily_quiz_screen.dart';
 import 'package:QuizSphere/quizes/home/onboarding_screen.dart';
@@ -37,6 +38,18 @@ Future<void> main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // ── AdMob ──────────────────────────────────────────────────────────────────
+  // Must be initialised before any ad is requested.
+  // PremiumProvider handles purchase restoration automatically via its init().
+  // Skip on web — google_mobile_ads is mobile-only and crashes on web.
+  if (!kIsWeb) {
+    try {
+      await AdmobService.initialize();
+    } catch (e) {
+      debugPrint('[AdMob] init skipped: $e');
+    }
+  }
 
   // ── FCM ────────────────────────────────────────────────────
   // FCM uses native push APIs that are NOT available on web.

@@ -1,19 +1,29 @@
+// ── Ad integration note ─────────────────────────────────────────────────────
+// Rewarded ad shown BEFORE generating AI questions for free users.
+// Premium users (isPremium == true) skip the ad and generate immediately.
+// If the ad fails to load → fail-open: generate anyway.
+// ────────────────────────────────────────────────────────────────────────────
+
+import 'package:QuizSphere/ads/provider/premium_provider.dart';
+import 'package:QuizSphere/ads/services/admob_service.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/groq_ai_service.dart';
 import '../services/admin_quiz_service.dart';
 
-class AiGenerateQuestionsScreen extends StatefulWidget {
+class AiGenerateQuestionsScreen extends ConsumerStatefulWidget {
   final String quizId;
   const AiGenerateQuestionsScreen({super.key, required this.quizId});
 
   @override
-  State<AiGenerateQuestionsScreen> createState() =>
+  ConsumerState<AiGenerateQuestionsScreen> createState() =>
       _AiGenerateQuestionsScreenState();
 }
 
-class _AiGenerateQuestionsScreenState extends State<AiGenerateQuestionsScreen> {
+class _AiGenerateQuestionsScreenState
+    extends ConsumerState<AiGenerateQuestionsScreen> {
   late GroqAIService groqAIService;
   late AdminQuizService quizService;
 
@@ -69,6 +79,12 @@ class _AiGenerateQuestionsScreenState extends State<AiGenerateQuestionsScreen> {
   }
 
   // ================= GENERATE QUESTIONS =================
+  //
+  // Ad control logic:
+  //   • Free users  → show rewarded ad, then generate on reward earned.
+  //   • Premium     → skip ad, generate immediately.
+  //   • Ad failure  → fail-open: generate anyway (UX never blocked).
+  //
   Future<void> generate() async {
     // FIX: guard against uninitialised service (missing API key / .env error)
     if (_initError != null) {
@@ -88,11 +104,24 @@ class _AiGenerateQuestionsScreenState extends State<AiGenerateQuestionsScreen> {
       return;
     }
 
-    setState(() {
-      loading = true;
-      questions.clear();
-    });
+    // Rewarded ad gate for free users.
+    final isPremium = ref.read(isPremiumProvider);
+    if (!isPremium) {
+      // Show rewarded ad before allowing generation.
+      AdmobService.loadAndShowRewardedAd(
+        onRewarded: () => _doGenerate(), // continue only after reward
+        onFailed: () => _doGenerate(), // fail-open: still generate
+        onAdDismissed: () {}, // loading state handled inside _doGenerate
+      );
+      return; // wait for ad callback
+    }
 
+    // Premium user → go straight to generation.
+    _doGenerate();
+  }
+
+  Future<void> _doGenerate() async {
+    if (loading || topicTitle == null) return;
     try {
       final result = await groqAIService.generateMCQs(
         topic: topicTitle!,

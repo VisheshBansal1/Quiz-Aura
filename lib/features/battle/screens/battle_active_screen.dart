@@ -56,8 +56,9 @@ class _BattleActiveScreenState extends State<BattleActiveScreen>
     _loadBattleAndQuiz();
 
     // Listen for battle to finish (opponent also submitted)
-    _battleSub = BattleV2Service.battleStream(widget.battleId)
-        .listen(_onBattleUpdate);
+    _battleSub = BattleV2Service.battleStream(
+      widget.battleId,
+    ).listen(_onBattleUpdate);
   }
 
   @override
@@ -83,8 +84,7 @@ class _BattleActiveScreenState extends State<BattleActiveScreen>
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (_) =>
-                  BattleResultScreen(battleId: widget.battleId),
+              builder: (_) => BattleResultScreen(battleId: widget.battleId),
             ),
           );
         }
@@ -97,8 +97,7 @@ class _BattleActiveScreenState extends State<BattleActiveScreen>
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> _loadBattleAndQuiz() async {
     try {
-      final battle =
-          await BattleV2Service.fetchBattle(widget.battleId);
+      final battle = await BattleV2Service.fetchBattle(widget.battleId);
       if (battle == null) {
         setState(() {
           _loadError = 'Battle not found';
@@ -114,7 +113,8 @@ class _BattleActiveScreenState extends State<BattleActiveScreen>
       if (_quizId.isEmpty) {
         if (mounted) {
           setState(() {
-            _loadError = 'This battle has no quiz assigned. Please contact the host.';
+            _loadError =
+                'This battle has no quiz assigned. Please contact the host.';
             _loadingQuiz = false;
           });
         }
@@ -200,7 +200,8 @@ class _BattleActiveScreenState extends State<BattleActiveScreen>
     int score = 0;
     for (final q in _questions) {
       // BUG FIX: support both 'correctIndex' and 'correct' field names
-      final correctIdx = (q.data()['correctIndex'] as int?) ??
+      final correctIdx =
+          (q.data()['correctIndex'] as int?) ??
           (q.data()['correct'] as int?) ??
           -1;
       final userAnswer = _answers[q.id];
@@ -227,9 +228,9 @@ class _BattleActiveScreenState extends State<BattleActiveScreen>
         setState(() => _submitting = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  e.toString().replaceFirst('Exception: ', '')),
-              backgroundColor: Colors.redAccent),
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            backgroundColor: Colors.redAccent,
+          ),
         );
       }
     }
@@ -241,10 +242,8 @@ class _BattleActiveScreenState extends State<BattleActiveScreen>
       barrierDismissible: false,
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF203A43),
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20)),
-        title: const Text('Done! ✅',
-            style: TextStyle(color: Colors.white)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Done! ✅', style: TextStyle(color: Colors.white)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -269,13 +268,12 @@ class _BattleActiveScreenState extends State<BattleActiveScreen>
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
+        fit: StackFit.expand,
         children: [
           Container(
-              decoration: const BoxDecoration(
-                  gradient: AppColors.mainGradient)),
-          SafeArea(
-            child: _buildBody(),
+            decoration: const BoxDecoration(gradient: AppColors.mainGradient),
           ),
+          Positioned.fill(child: SafeArea(child: _buildBody())),
         ],
       ),
     );
@@ -284,7 +282,8 @@ class _BattleActiveScreenState extends State<BattleActiveScreen>
   Widget _buildBody() {
     if (_loadingQuiz) {
       return const Center(
-          child: CircularProgressIndicator(color: Colors.white));
+        child: CircularProgressIndicator(color: Colors.white),
+      );
     }
 
     if (_loadError != null) {
@@ -294,12 +293,17 @@ class _BattleActiveScreenState extends State<BattleActiveScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline,
-                  color: Colors.redAccent, size: 48),
+              const Icon(
+                Icons.error_outline,
+                color: Colors.redAccent,
+                size: 48,
+              ),
               const SizedBox(height: 16),
-              Text(_loadError!,
-                  style: const TextStyle(color: Colors.white),
-                  textAlign: TextAlign.center),
+              Text(
+                _loadError!,
+                style: const TextStyle(color: Colors.white),
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: () => Navigator.pop(context),
@@ -313,8 +317,11 @@ class _BattleActiveScreenState extends State<BattleActiveScreen>
 
     if (_questions.isEmpty) {
       return const Center(
-          child: Text('No questions in this quiz',
-              style: TextStyle(color: Colors.white60)));
+        child: Text(
+          'No questions in this quiz',
+          style: TextStyle(color: Colors.white60),
+        ),
+      );
     }
 
     return Column(
@@ -332,8 +339,7 @@ class _BattleActiveScreenState extends State<BattleActiveScreen>
         LinearProgressIndicator(
           value: (_currentIndex + 1) / _questions.length,
           backgroundColor: Colors.white12,
-          valueColor:
-              const AlwaysStoppedAnimation<Color>(Colors.tealAccent),
+          valueColor: const AlwaysStoppedAnimation<Color>(Colors.tealAccent),
           minHeight: 3,
         ),
 
@@ -346,15 +352,16 @@ class _BattleActiveScreenState extends State<BattleActiveScreen>
                     children: [
                       CircularProgressIndicator(color: Colors.white),
                       SizedBox(height: 16),
-                      Text('Submitting...',
-                          style: TextStyle(color: Colors.white70)),
+                      Text(
+                        'Submitting...',
+                        style: TextStyle(color: Colors.white70),
+                      ),
                     ],
                   ),
                 )
               : _BattleQuestionView(
                   question: _questions[_currentIndex],
-                  selectedAnswer:
-                      _answers[_questions[_currentIndex].id],
+                  selectedAnswer: _answers[_questions[_currentIndex].id],
                   onAnswer: (idx) {
                     setState(() {
                       _answers[_questions[_currentIndex].id] = idx;
@@ -411,8 +418,7 @@ class _BattleHeader extends StatelessWidget {
       builder: (context, snap) {
         final players = snap.data ?? [];
         final me = players.where((p) => p.uid == uid).firstOrNull;
-        final opponent =
-            players.where((p) => p.uid != uid).firstOrNull;
+        final opponent = players.where((p) => p.uid != uid).firstOrNull;
 
         return Container(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -433,8 +439,7 @@ class _BattleHeader extends StatelessWidget {
                 children: [
                   Text(
                     'Q${currentIndex + 1}/$total',
-                    style: const TextStyle(
-                        color: Colors.white54, fontSize: 11),
+                    style: const TextStyle(color: Colors.white54, fontSize: 11),
                   ),
                   Text(
                     _timerText,
@@ -485,8 +490,9 @@ class _PlayerScoreChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment:
-          isOpponent ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      crossAxisAlignment: isOpponent
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
       children: [
         Text(
           name.length > 10 ? '${name.substring(0, 10)}...' : name,
@@ -500,32 +506,34 @@ class _PlayerScoreChip extends StatelessWidget {
                 width: 8,
                 height: 8,
                 margin: const EdgeInsets.only(right: 4),
-                decoration: BoxDecoration(
-                    shape: BoxShape.circle, color: color),
+                decoration: BoxDecoration(shape: BoxShape.circle, color: color),
               ),
             Text(
               score.toString(),
               style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20),
+                color: color,
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+              ),
             ),
             if (isOpponent)
               Container(
                 width: 8,
                 height: 8,
                 margin: const EdgeInsets.only(left: 4),
-                decoration: BoxDecoration(
-                    shape: BoxShape.circle, color: color),
+                decoration: BoxDecoration(shape: BoxShape.circle, color: color),
               ),
           ],
         ),
         if (submitted)
-          Text('Done',
-              style: TextStyle(
-                  color: color.withOpacity(0.7),
-                  fontSize: 10,
-                  fontStyle: FontStyle.italic)),
+          Text(
+            'Done',
+            style: TextStyle(
+              color: color.withOpacity(0.7),
+              fontSize: 10,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
       ],
     );
   }
@@ -557,10 +565,12 @@ class _BattleQuestionView extends StatelessWidget {
     final List<String> options;
     if (data['options'] is List) {
       options = List<String>.from(
-          (data['options'] as List).map((e) => e?.toString() ?? ''));
+        (data['options'] as List).map((e) => e?.toString() ?? ''),
+      );
     } else if (data['choices'] is List) {
       options = List<String>.from(
-          (data['choices'] as List).map((e) => e?.toString() ?? ''));
+        (data['choices'] as List).map((e) => e?.toString() ?? ''),
+      );
     } else {
       options = [];
     }
@@ -575,7 +585,10 @@ class _BattleQuestionView extends StatelessWidget {
             child: Text(
               questionText,
               style: const TextStyle(
-                  color: Colors.white, fontSize: 16, height: 1.5),
+                color: Colors.white,
+                fontSize: 16,
+                height: 1.5,
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -590,17 +603,20 @@ class _BattleQuestionView extends StatelessWidget {
                 duration: const Duration(milliseconds: 180),
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 14),
+                  horizontal: 14,
+                  vertical: 14,
+                ),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
                   color: isSelected
                       ? AppColors.battleBlue.withOpacity(0.2)
                       : Colors.white.withOpacity(0.05),
                   border: Border.all(
-                      color: isSelected
-                          ? AppColors.battleBlue
-                          : Colors.white.withOpacity(0.12),
-                      width: isSelected ? 1.5 : 1),
+                    color: isSelected
+                        ? AppColors.battleBlue
+                        : Colors.white.withOpacity(0.12),
+                    width: isSelected ? 1.5 : 1,
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -614,23 +630,25 @@ class _BattleQuestionView extends StatelessWidget {
                             : Colors.white.withOpacity(0.08),
                       ),
                       child: Center(
-                        child: Text(letter,
-                            style: TextStyle(
-                                color: isSelected
-                                    ? Colors.white
-                                    : Colors.white54,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13)),
+                        child: Text(
+                          letter,
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : Colors.white54,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text(options[i],
-                          style: TextStyle(
-                              color: isSelected
-                                  ? Colors.white
-                                  : Colors.white70,
-                              fontSize: 14.5)),
+                      child: Text(
+                        options[i],
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : Colors.white70,
+                          fontSize: 14.5,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -669,8 +687,7 @@ class _BattleNavBar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.3),
-        border: Border(
-            top: BorderSide(color: Colors.white.withOpacity(0.08))),
+        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.08))),
       ),
       child: Row(
         children: [
@@ -683,7 +700,8 @@ class _BattleNavBar extends StatelessWidget {
                 foregroundColor: Colors.white70,
                 side: const BorderSide(color: Colors.white24),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             )
           else
@@ -700,7 +718,8 @@ class _BattleNavBar extends StatelessWidget {
                     backgroundColor: Colors.teal,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 )
               : ElevatedButton.icon(
@@ -711,7 +730,8 @@ class _BattleNavBar extends StatelessWidget {
                     backgroundColor: Colors.teal,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
         ],

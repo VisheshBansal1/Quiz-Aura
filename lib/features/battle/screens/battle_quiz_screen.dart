@@ -24,7 +24,8 @@ class BattleQuizScreen extends StatefulWidget {
 class _BattleQuizScreenState extends State<BattleQuizScreen>
     with WidgetsBindingObserver, TickerProviderStateMixin {
   final _db = FirebaseFirestore.instance;
-  final _uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+  // Use a getter so uid is always evaluated fresh (not null at init time)
+  String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
   int _currentQuestion = 0;
   int _timerSeconds = 20;
