@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../services/groq_ai_service.dart';
-import '../services/Admin_quiz_service.dart';
+import '../services/admin_quiz_service.dart';
 
 class AiGenerateQuestionsScreen extends StatefulWidget {
   final String quizId;
@@ -21,15 +21,36 @@ class _AiGenerateQuestionsScreenState extends State<AiGenerateQuestionsScreen> {
   bool saving = false;
 
   String difficulty = "Medium";
-  String? topic;
+  String? topicTitle;
   int questionCount = 5;
+  static const int maxQuestionsAllowed = 15;
 
   List<Map<String, dynamic>> questions = [];
+
+  // ── Input decoration shared across all fields ──────────────────────────
+  static const _inputDecoration = InputDecoration(
+    labelStyle: TextStyle(color: Colors.white70),
+    enabledBorder: UnderlineInputBorder(
+      borderSide: BorderSide(color: Colors.white38),
+    ),
+    focusedBorder: UnderlineInputBorder(
+      borderSide: BorderSide(color: Colors.tealAccent),
+    ),
+  );
+
+  String? _initError; // FIX: capture constructor errors (e.g. missing .env key)
 
   @override
   void initState() {
     super.initState();
-    groqAIService = GroqAIService();
+    // FIX: GroqAIService constructor used to throw when the API key was absent
+    // (common on Flutter web where dotenv loading may fail). Catch it here so
+    // the screen still renders and shows the user an actionable error message.
+    try {
+      groqAIService = GroqAIService();
+    } catch (e) {
+      _initError = e.toString().replaceFirst('Exception: ', '');
+    }
     quizService = AdminQuizService();
     _loadQuizTopic();
   }
@@ -41,57 +62,97 @@ class _AiGenerateQuestionsScreenState extends State<AiGenerateQuestionsScreen> {
         .doc(widget.quizId)
         .get();
 
-    final t = snap.data()?['topic'];
-    setState(() {
-      topic = (t is String && t.trim().isNotEmpty) ? t : null;
-    });
+    final data = snap.data();
+    if (mounted) {
+      setState(() => topicTitle = data?['topicTitle']);
+    }
   }
 
   // ================= GENERATE QUESTIONS =================
   Future<void> generate() async {
-    if (loading || topic == null) return;
+    // FIX: guard against uninitialised service (missing API key / .env error)
+    if (_initError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_initError!), backgroundColor: Colors.redAccent),
+      );
+      return;
+    }
+    if (loading || topicTitle == null) return;
+
+    if (questionCount > maxQuestionsAllowed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You can generate maximum 15 questions at a time.'),
+        ),
+      );
+      return;
+    }
 
     setState(() {
       loading = true;
       questions.clear();
     });
 
-    final result = await groqAIService.generateMCQs(
-      topic: topic!,
-      difficulty: difficulty,
-      count: questionCount,
-    );
+    try {
+      final result = await groqAIService.generateMCQs(
+        topic: topicTitle!,
+        difficulty: difficulty,
+        count: questionCount,
+      );
 
-    setState(() {
-      questions = result
-          .map(
-            (q) => {
-              ...q,
-              'difficulty': difficulty, // ✅ TAGGING
-            },
-          )
-          .toList();
-      loading = false;
-    });
+      if (!mounted) return;
+      setState(() {
+        questions = result.map((q) {
+          return {
+            ...q,
+            'difficulty': difficulty,
+            'solution': q['solution'] ?? 'No explanation provided',
+          };
+        }).toList();
+        loading = false;
+      });
+    } catch (e) {
+      // FIX: surface AI/network errors to the user instead of silently failing
+      if (!mounted) return;
+      setState(() => loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.redAccent,
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    }
   }
 
   // ================= REGENERATE SINGLE =================
   Future<void> regenerateOne(int index) async {
-    if (topic == null) return;
+    if (_initError != null || topicTitle == null) return;
 
-    final result = await groqAIService.generateMCQs(
-      topic: topic!,
-      difficulty: questions[index]['difficulty'],
-      count: 1,
-    );
+    try {
+      final result = await groqAIService.generateMCQs(
+        topic: topicTitle!,
+        difficulty: questions[index]['difficulty'],
+        count: 1,
+      );
 
-    if (result.isNotEmpty) {
-      setState(() {
-        questions[index] = {
-          ...result.first,
-          'difficulty': questions[index]['difficulty'],
-        };
-      });
+      if (!mounted) return;
+      if (result.isNotEmpty) {
+        setState(() {
+          questions[index] = {
+            ...result.first,
+            'difficulty': questions[index]['difficulty'],
+          };
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
     }
   }
 
@@ -100,57 +161,112 @@ class _AiGenerateQuestionsScreenState extends State<AiGenerateQuestionsScreen> {
     if (saving) return;
     setState(() => saving = true);
 
-    for (final q in questions) {
-      await quizService.addQuestion(
-        quizId: widget.quizId,
-        question: q['question'],
-        options: List<String>.from(q['options']),
-        correctIndex: q['correctIndex'],
-        difficulty: q['difficulty'], // ✅ STORED
-      );
-    }
+    try {
+      for (final q in questions) {
+        final String type = (q['type'] ?? 'mcq').toString();
 
-    if (mounted) Navigator.pop(context);
+        if (type == 'mcq') {
+          final title = q['title'] ?? q['question'];
+          if (title == null || q['options'] == null) {
+            throw Exception('Invalid MCQ data: $q');
+          }
+          await quizService.addMcqQuestion(
+            quizId: widget.quizId,
+            data: {
+              'type': 'mcq',
+              'question': title,
+              'title': title,
+              'options': List<String>.from(q['options']),
+              'correctIndex': q['correctIndex'] ?? 0,
+              'difficulty': q['difficulty'] ?? 'Medium',
+              'solution': q['solution'] ?? '',
+            },
+          );
+        } else if (type == 'coding') {
+          final title = q['title'] ?? q['question'];
+          if (title == null) throw Exception('Invalid coding question: $q');
+          await quizService.addCodingQuestion(
+            quizId: widget.quizId,
+            data: {
+              'type': 'coding',
+              'title': title,
+              'visibleTestCases': List<Map<String, String>>.from(
+                q['visibleTestCases'] ?? [],
+              ),
+              'hiddenTestCases': List<Map<String, String>>.from(
+                q['hiddenTestCases'] ?? [],
+              ),
+              'pointsPerTestCase': q['pointsPerTestCase'] ?? 10,
+            },
+          );
+        }
+      }
+
+      final countSnapshot = await FirebaseFirestore.instance
+          .collection('quizzes')
+          .doc(widget.quizId)
+          .collection('questions')
+          .count()
+          .get();
+
+      await FirebaseFirestore.instance
+          .collection('quizzes')
+          .doc(widget.quizId)
+          .update({'totalQuestions': countSnapshot.count ?? 0});
+
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      debugPrint('SAVE ERROR: $e');
+      rethrow;
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
   }
 
   // ================= UI =================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      // ✅ FIX 1: Set the scaffold color directly — no outer Container wrapper.
+      // Wrapping Scaffold in a Container + backgroundColor: transparent is
+      // unreliable on Android; the theme's white scaffold background bleeds through.
+      backgroundColor: const Color(0xFF0F2027),
       appBar: AppBar(
         title: const Text(
           "AI Question Generator",
           style: TextStyle(color: Colors.white),
         ),
         backgroundColor: Colors.transparent,
-        leading: IconButton(
-          onPressed: () {
-            Navigator.pop(context);
-          },
-          icon: Icon(Icons.arrow_back, color: Colors.white),
-        ),
         elevation: 0,
-        flexibleSpace: _bg(),
+        flexibleSpace: _gradientBg(),
+        leading: IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+        ),
       ),
       body: Stack(
         children: [
-          _bg(),
+          // ✅ FIX 2: Use Positioned.fill so the gradient Container is explicitly
+          // constrained to fill the Stack. An unsized Container inside a Stack
+          // collapses to 0×0 — that's why the background was invisible before.
+          Positioned.fill(child: _gradientBg()),
 
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
                 _controls(),
-
                 const SizedBox(height: 16),
-
                 Expanded(
                   child: questions.isEmpty
                       ? const Center(
                           child: Text(
-                            "No questions generated",
-                            style: TextStyle(color: Colors.white70),
+                            "No questions generated yet.\nTap Generate to start.",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white60,
+                              fontSize: 15,
+                            ),
                           ),
                         )
                       : ListView.builder(
@@ -158,25 +274,51 @@ class _AiGenerateQuestionsScreenState extends State<AiGenerateQuestionsScreen> {
                           itemBuilder: (_, i) => _editableQuestion(i),
                         ),
                 ),
-
                 if (questions.isNotEmpty)
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed: saving ? null : saveAll,
-                      child: const Text("Save All"),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.tealAccent,
+                          foregroundColor: Colors.black,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        onPressed: saving ? null : saveAll,
+                        icon: const Icon(Icons.save_alt),
+                        label: const Text(
+                          "Save All",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
                     ),
                   ),
               ],
             ),
           ),
 
+          // ── Loading / saving overlay ──────────────────────────────────
           if (loading || saving)
-            Container(
-              color: Colors.black54,
-              child: const Center(
-                child: CircularProgressIndicator(color: Colors.white),
+            Positioned.fill(
+              child: Container(
+                color: Colors.black54,
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(color: Colors.tealAccent),
+                      const SizedBox(height: 16),
+                      Text(
+                        loading ? 'Generating questions…' : 'Saving…',
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
         ],
@@ -190,17 +332,20 @@ class _AiGenerateQuestionsScreenState extends State<AiGenerateQuestionsScreen> {
       child: Column(
         children: [
           Text(
-            topic ?? "Loading topic...",
+            topicTitle ?? "Loading topic...",
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,
+              fontSize: 16,
             ),
           ),
           const SizedBox(height: 12),
 
           DropdownButtonFormField<String>(
             value: difficulty,
-            dropdownColor: const Color.fromARGB(255, 140, 137, 145),
+            dropdownColor: const Color(0xFF203A43),
+            style: const TextStyle(color: Colors.white),
+            decoration: _inputDecoration.copyWith(labelText: "Difficulty"),
             items: const [
               DropdownMenuItem(
                 value: "Easy",
@@ -216,73 +361,41 @@ class _AiGenerateQuestionsScreenState extends State<AiGenerateQuestionsScreen> {
               ),
             ],
             onChanged: (v) => setState(() => difficulty = v!),
-            decoration: const InputDecoration(
-              labelText: "Difficulty",
-              fillColor: Color.fromARGB(255, 139, 218, 215),
-              labelStyle: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
           ),
 
           const SizedBox(height: 12),
 
           TextFormField(
-            style: TextStyle(color: Colors.white),
             initialValue: questionCount.toString(),
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: "Number of Questions",
-              fillColor: Color.fromARGB(255, 250, 250, 250),
-              labelStyle: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+            decoration: _inputDecoration.copyWith(
+              labelText: "Number of Questions (max $maxQuestionsAllowed)",
             ),
             onChanged: (v) => questionCount = int.tryParse(v) ?? 5,
           ),
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
 
           SizedBox(
             width: double.infinity,
             height: 52,
-            child: ElevatedButton(
-              onPressed: generate,
+            child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                padding: EdgeInsets.zero,
-                backgroundColor: Colors.transparent,
-                shadowColor: Colors.transparent,
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
               ),
-              child: Ink(
-                decoration: BoxDecoration(
-                  
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF7C3AED), Color(0xFF9333EA)],
-                  ),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(Icons.auto_awesome, size: 22, color: Colors.white,),
-                    SizedBox(width: 8),
-                    Text(
-                      "Generate",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white
-                      ),
-                    ),
-                  ],
-                ),
+              onPressed: generate,
+              icon: const Icon(Icons.auto_awesome),
+              label: const Text(
+                "Generate",
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
           ),
@@ -299,50 +412,70 @@ class _AiGenerateQuestionsScreenState extends State<AiGenerateQuestionsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // QUESTION EDIT
+          Text(
+            "Q${index + 1}",
+            style: const TextStyle(
+              color: Colors.tealAccent,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 6),
+
           TextFormField(
             initialValue: q['question'],
             style: const TextStyle(color: Colors.white),
-            decoration: const InputDecoration(labelText: "Question"),
+            decoration: _inputDecoration.copyWith(labelText: "Question"),
             onChanged: (v) => q['question'] = v,
           ),
 
           const SizedBox(height: 8),
 
-          // OPTIONS
-          for (int i = 0; i < q['options'].length; i++)
+          for (int i = 0; i < (q['options'] as List).length; i++)
             Row(
               children: [
                 Expanded(
                   child: TextFormField(
                     initialValue: q['options'][i],
                     style: const TextStyle(color: Colors.white),
+                    decoration: _inputDecoration.copyWith(
+                      labelText: "Option ${i + 1}",
+                    ),
                     onChanged: (v) => q['options'][i] = v,
                   ),
                 ),
                 Radio<int>(
                   value: i,
                   groupValue: q['correctIndex'],
+                  activeColor: Colors.tealAccent,
                   onChanged: (v) => setState(() => q['correctIndex'] = v),
                 ),
               ],
             ),
 
+          const SizedBox(height: 10),
+
+          TextFormField(
+            initialValue: q['solution'] ?? '',
+            style: const TextStyle(color: Colors.white),
+            maxLines: 2,
+            decoration: _inputDecoration.copyWith(
+              labelText: "Solution / Explanation",
+            ),
+            onChanged: (v) => q['solution'] = v,
+          ),
+
           const SizedBox(height: 8),
 
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "Difficulty: ${q['difficulty']}",
-                style: const TextStyle(color: Colors.white70),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => regenerateOne(index),
+              icon: const Icon(Icons.refresh, size: 16, color: Colors.white60),
+              label: const Text(
+                "Regenerate",
+                style: TextStyle(color: Colors.white60),
               ),
-              TextButton.icon(
-                onPressed: () => regenerateOne(index),
-                icon: const Icon(Icons.refresh, color: Colors.white60,),
-                label: const Text("Regenerate",style: TextStyle(color: Colors.white60),),
-              ),
-            ],
+            ),
           ),
         ],
       ),
@@ -350,9 +483,11 @@ class _AiGenerateQuestionsScreenState extends State<AiGenerateQuestionsScreen> {
   }
 
   // ================= UI HELPERS =================
-  Widget _bg() => Container(
+  Widget _gradientBg() => Container(
     decoration: const BoxDecoration(
       gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
         colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
       ),
     ),
@@ -363,8 +498,8 @@ class _AiGenerateQuestionsScreenState extends State<AiGenerateQuestionsScreen> {
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
       borderRadius: BorderRadius.circular(18),
-      color: Colors.white.withOpacity(0.12),
-      border: Border.all(color: Colors.white.withOpacity(0.25)),
+      color: Colors.white.withOpacity(0.10),
+      border: Border.all(color: Colors.white.withOpacity(0.20)),
     ),
     child: child,
   );

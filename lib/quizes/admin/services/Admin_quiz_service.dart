@@ -19,11 +19,12 @@ class AdminQuizService {
   }
 
   // --------------------------------------------------
-  // 🧠 CREATE QUIZ (PUBLIC / PRIVATE + TIMING)
+  // 🧠 CREATE QUIZ
   // --------------------------------------------------
   Future<Map<String, String?>> createQuiz({
     required String title,
-    required String topic,
+    required String topicId,
+    required String topicTitle,
     required bool isPrivate,
     required DateTime startAt,
     required DateTime endAt,
@@ -36,8 +37,9 @@ class AdminQuizService {
 
     final doc = await _db.collection('quizzes').add({
       'title': title.trim(),
-      'topic': topic.trim(),
-      'type': isPrivate ? 'private' : 'public',
+      'topicId': topicId,
+      'topicTitle': topicTitle,
+      'visibility': isPrivate ? 'private' : 'public',
       'joinCode': joinCode,
       'createdBy': uid,
       'createdAt': FieldValue.serverTimestamp(),
@@ -47,33 +49,23 @@ class AdminQuizService {
       'durationMinutes': durationMinutes,
     });
 
-    return {'quizId': doc.id, 'joinCode': joinCode};
+    return {
+      'quizId': doc.id,
+      'joinCode': joinCode,
+    };
   }
 
   // --------------------------------------------------
-  // ❓ ADD QUESTION (WITH DIFFICULTY SUPPORT)
+  // ❓ ADD MCQ QUESTION (GENERIC)
   // --------------------------------------------------
-  Future<void> addQuestion({
+  Future<void> addMcqQuestion({
     required String quizId,
-    required String question,
-    required List<String> options,
-    required int correctIndex,
-    String difficulty = "Medium", // ✅ DEFAULT
+    required Map<String, dynamic> data,
   }) async {
-    if (quizId.isEmpty) {
-      throw Exception("Invalid quiz ID");
-    }
-    if (question.trim().isEmpty) {
-      throw Exception("Question required");
-    }
-    if (options.length != 4) {
-      throw Exception("Exactly 4 options required");
-    }
-    if (correctIndex < 0 || correctIndex > 3) {
-      throw Exception("Correct option must be between 0–3");
-    }
-    if (!["Easy", "Medium", "Hard"].contains(difficulty)) {
-      throw Exception("Invalid difficulty");
+    if (quizId.isEmpty) throw Exception("Invalid quiz ID");
+
+    if (data['type'] != 'mcq') {
+      throw Exception("MCQ question must have type = mcq");
     }
 
     await _db
@@ -81,10 +73,32 @@ class AdminQuizService {
         .doc(quizId)
         .collection('questions')
         .add({
-      'question': question.trim(),
-      'options': options.map((e) => e.trim()).toList(),
-      'correctIndex': correctIndex,
-      'difficulty': difficulty, // ✅ STORED
+      ...data,
+      'isActive': true,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  // --------------------------------------------------
+  // 💻 ADD CODING QUESTION (GENERIC)
+  // --------------------------------------------------
+  Future<void> addCodingQuestion({
+    required String quizId,
+    required Map<String, dynamic> data,
+  }) async {
+    if (quizId.isEmpty) throw Exception("Invalid quiz ID");
+
+    if (data['type'] != 'coding') {
+      throw Exception("Coding question must have type = coding");
+    }
+
+    await _db
+        .collection('quizzes')
+        .doc(quizId)
+        .collection('questions')
+        .add({
+      ...data,
+      'isActive': true,
       'createdAt': FieldValue.serverTimestamp(),
     });
   }

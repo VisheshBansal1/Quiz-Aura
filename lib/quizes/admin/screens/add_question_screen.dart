@@ -1,5 +1,6 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../services/Admin_quiz_service.dart';
+import '../services/admin_quiz_service.dart';
 
 class AddQuestionScreen extends StatefulWidget {
   final String quizId;
@@ -14,277 +15,271 @@ class _AddQuestionScreenState extends State<AddQuestionScreen> {
 
   final questionCtrl = TextEditingController();
   final optionCtrls = List.generate(4, (_) => TextEditingController());
+  final inputCtrl = TextEditingController();
+  final outputCtrl = TextEditingController();
 
+  String questionType = "mcq";
   int correctIndex = 0;
   bool loading = false;
 
-  final service = AdminQuizService();
+  final AdminQuizService service = AdminQuizService();
 
   @override
   void dispose() {
     questionCtrl.dispose();
+    inputCtrl.dispose();
+    outputCtrl.dispose();
     for (final c in optionCtrls) {
       c.dispose();
     }
     super.dispose();
   }
 
-  // ================= SAVE QUESTION =================
+  // ================= SAVE =================
   Future<void> saveQuestion() async {
-    FocusScope.of(context).unfocus();
+  FocusScope.of(context).unfocus();
+  if (!_formKey.currentState!.validate() || loading) return;
 
-    if (!_formKey.currentState!.validate()) return;
-    if (loading) return;
+  setState(() => loading = true);
 
-    setState(() => loading = true);
+  try {
+    final quizRef = FirebaseFirestore.instance
+        .collection('quizzes')
+        .doc(widget.quizId);
 
-    try {
-      await service.addQuestion(
+    // 1️⃣ Add Question
+    if (questionType == "mcq") {
+      await service.addMcqQuestion(
         quizId: widget.quizId,
-        question: questionCtrl.text.trim(),
-        options: optionCtrls.map((e) => e.text.trim()).toList(),
-        correctIndex: correctIndex,
+        data: {
+          "type": "mcq",
+          "question": questionCtrl.text.trim(),
+          "options": optionCtrls.map((e) => e.text.trim()).toList(),
+          "correctIndex": correctIndex,
+          "createdAt": FieldValue.serverTimestamp(),
+        },
       );
-
-      questionCtrl.clear();
-      for (final c in optionCtrls) {
-        c.clear();
-      }
-
-      setState(() => correctIndex = 0);
-
-      _success("Question added successfully");
-    } catch (e) {
-      _error(e.toString());
-    } finally {
-      if (mounted) setState(() => loading = false);
+    } else {
+      await service.addCodingQuestion(
+        quizId: widget.quizId,
+        data: {
+          "type": "coding",
+          "title": questionCtrl.text.trim(),
+          "visibleTestCases": [
+            {
+              "input": inputCtrl.text.trim(),
+              "output": outputCtrl.text.trim(),
+            },
+          ],
+          "hiddenTestCases": [],
+          "createdAt": FieldValue.serverTimestamp(),
+        },
+      );
     }
+
+    // 2️⃣ Count actual questions from subcollection
+    final countSnapshot = await quizRef
+        .collection('questions')
+        .count()
+        .get();
+
+    final int updatedCount = countSnapshot.count ?? 0;
+
+    // 3️⃣ Update quiz document
+    await quizRef.update({
+      "totalQuestions": updatedCount,
+    });
+
+    _clear();
+    _success("Question added");
+
+  } catch (e) {
+    _error(e.toString());
+  } finally {
+    if (mounted) setState(() => loading = false);
+  }
+}
+
+  void _clear() {
+    questionCtrl.clear();
+    inputCtrl.clear();
+    outputCtrl.clear();
+    for (final c in optionCtrls) {
+      c.clear();
+    }
+    correctIndex = 0;
   }
 
-  // ================= UI HELPERS =================
-  void _error(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
-    );
-  }
-
-  void _success(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  // ================= BUILD =================
+  // ================= UI =================
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: const Text("Add Question", style: TextStyle(color: Colors.white),),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          onPressed: () {
-            Navigator.pop(context);
-          },
-          icon: Icon(Icons.arrow_back, color: Colors.white,),
-        ),
-        flexibleSpace: _gradientBg(),
-      ),
-      body: Stack(
-        children: [
-          _gradientBg(),
-
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Form(
-                key: _formKey,
-                child: ListView(
-                  children: [
-                    // ===== QUESTION =====
-                    _glassCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            "Question",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          _glassInput(
-                            controller: questionCtrl,
-                            hint: "Enter the question here",
-                            validator: (v) =>
-                                v == null || v.trim().isEmpty
-                                    ? "Question is required"
-                                    : null,
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // ===== OPTIONS =====
-                    _glassCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            "Options (select correct answer)",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          for (int i = 0; i < 4; i++) _optionTile(i),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 28),
-
-                    // ===== SAVE BUTTON =====
-                    SizedBox(
-                      height: 52,
-                      child: ElevatedButton.icon(
-                        onPressed: loading ? null : saveQuestion,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.black,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        icon: const Icon(Icons.save),
-                        label: const Text(
-                          "Save Question",
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          if (loading)
-            Container(
-              color: Colors.black.withOpacity(0.4),
-              child: const Center(
-                child: CircularProgressIndicator(color: Colors.white),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  // ================= WIDGET BUILDERS =================
-
-  Widget _gradientBg() {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF0F2027),
-            Color(0xFF203A43),
-            Color(0xFF2C5364),
+          colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
+        ),
+      ),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: const Text(
+            "Add Question",
+            style: TextStyle(color: Colors.white),
+          ),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            icon: Icon(Icons.arrow_back, color: Colors.white,),
+          ),
+        ),
+        body: Stack(
+          children: [
+            _bg(),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Form(
+                key: _formKey,
+                child: ListView(
+                  children: [
+                    // _dropdown(),
+                    const SizedBox(height: 16),
+                    _input(questionCtrl, "Question"),
+                    const SizedBox(height: 16),
+                    if (questionType == "mcq") _mcqBlock(),
+                    if (questionType == "coding") _codingBlock(),
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: loading ? null : saveQuestion,
+                      child: const Text("Save Question"),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (loading)
+              Container(
+                color: Colors.black54,
+                child: const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                ),
+              ),
           ],
         ),
       ),
     );
   }
 
-  Widget _glassCard({required Widget child}) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        color: Colors.white.withOpacity(0.12),
-        border: Border.all(color: Colors.white.withOpacity(0.25)),
-      ),
-      child: child,
+  // ================= BLOCKS =================
+  Widget _dropdown() {
+    return DropdownButtonFormField<String>(
+      value: questionType,
+      items: const [
+        DropdownMenuItem(
+          value: "mcq",
+          child: Text("MCQ", style: TextStyle(color: Colors.white70)),
+        ),
+        DropdownMenuItem(
+          value: "coding",
+          child: Text("Coding", style: TextStyle(color: Colors.white70)),
+        ),
+      ],
+      onChanged: (v) => setState(() => questionType = v!),
+      decoration: const InputDecoration(labelText: "Question Type"),
     );
   }
 
-  Widget _glassInput({
-    required TextEditingController controller,
-    required String hint,
-    FormFieldValidator<String>? validator,
-  }) {
-    return TextFormField(
-      controller: controller,
-      validator: validator,
-      style: const TextStyle(color: Colors.white),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(color: Colors.white60),
-        filled: true,
-        fillColor: Colors.white.withOpacity(0.15),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-      ),
-    );
-  }
+  Widget _mcqBlock() {
+    return Column(
+      children: List.generate(4, (i) {
+        final isSelected = correctIndex == i;
 
-  Widget _optionTile(int index) {
-    final isSelected = correctIndex == index;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        color: isSelected
-            ? Colors.green.withOpacity(0.25)
-            : Colors.white.withOpacity(0.12),
-        border: Border.all(
-          color: isSelected
-              ? Colors.greenAccent
-              : Colors.white.withOpacity(0.25),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextFormField(
-              controller: optionCtrls[index],
-              validator: (v) =>
-                  v == null || v.trim().isEmpty
-                      ? "Option ${index + 1} required"
-                      : null,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: "Option ${index + 1}",
-                hintStyle: const TextStyle(color: Colors.white60),
-                border: InputBorder.none,
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isSelected
+                    ? Colors.greenAccent
+                    : Colors.white.withOpacity(0.2),
+                width: 1.2,
               ),
             ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: optionCtrls[i],
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: "Option ${i + 1}",
+                      hintStyle: const TextStyle(color: Colors.white54),
+                      border: InputBorder.none,
+                    ),
+                  ),
+                ),
+                Radio<int>(
+                  value: i,
+                  groupValue: correctIndex,
+                  activeColor: Colors.greenAccent,
+                  fillColor: MaterialStateProperty.all(Colors.white),
+                  onChanged: (v) => setState(() => correctIndex = v!),
+                ),
+              ],
+            ),
           ),
-          Radio<int>(
-            value: index,
-            groupValue: correctIndex,
-            activeColor: Colors.greenAccent,
-            onChanged:
-                loading ? null : (v) => setState(() => correctIndex = v!),
-          ),
-        ],
+        );
+      }),
+    );
+  }
+
+  Widget _codingBlock() {
+    return Column(
+      children: [
+        _input(inputCtrl, "Sample Input"),
+        const SizedBox(height: 12),
+        _input(outputCtrl, "Expected Output"),
+      ],
+    );
+  }
+
+  // ================= HELPERS =================
+  Widget _input(TextEditingController c, String label) {
+    return TextFormField(
+      controller: c,
+      validator: (v) => v == null || v.trim().isEmpty ? "Required" : null,
+      style: TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
       ),
     );
+  }
+
+  Widget _bg() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
+        ),
+      ),
+    );
+  }
+
+  void _error(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  void _success(String msg) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.green));
   }
 }

@@ -23,10 +23,8 @@ class _QuizRulesScreenState extends State<QuizRulesScreen> {
   @override
   void initState() {
     super.initState();
-    _updateRemaining();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      _updateRemaining();
-    });
+    _tick();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
   }
 
   @override
@@ -35,10 +33,10 @@ class _QuizRulesScreenState extends State<QuizRulesScreen> {
     super.dispose();
   }
 
-  void _updateRemaining() {
-    final diff = widget.startAt.difference(DateTime.now());
-
+  void _tick() {
     if (!mounted) return;
+
+    final diff = widget.startAt.difference(DateTime.now());
 
     if (diff.isNegative) {
       _timer?.cancel();
@@ -51,22 +49,23 @@ class _QuizRulesScreenState extends State<QuizRulesScreen> {
   String _format(Duration d) {
     final m = d.inMinutes.remainder(60);
     final s = d.inSeconds.remainder(60);
-    return "${m}m ${s}s";
+    return "${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}";
   }
 
   Future<void> _confirmAndStart() async {
     if (_starting) return;
 
-    final ok = await showDialog<bool>(
+    final confirm = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
-        title: const Text("Start Quiz"),
+        title: const Text("Start Test"),
         content: const Text(
-          "• Timer will start immediately\n"
-          "• You cannot go back\n"
-          "• Leaving the app may submit the quiz\n\n"
-          "Continue?",
+          "• Timer starts immediately\n"
+          "• No back navigation allowed\n"
+          "• Switching apps may submit your test\n"
+          "• Test auto-submits on timeout\n\n"
+          "Do you want to continue?",
         ),
         actions: [
           TextButton(
@@ -81,10 +80,9 @@ class _QuizRulesScreenState extends State<QuizRulesScreen> {
       ),
     );
 
-    if (ok == true && mounted) {
+    if (confirm == true && mounted) {
       setState(() => _starting = true);
-      Navigator.pop(context);
-      widget.onConfirmedStart();
+      widget.onConfirmedStart(); // 🚀 clean single exit
     }
   }
 
@@ -95,43 +93,43 @@ class _QuizRulesScreenState extends State<QuizRulesScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text("Quiz Rules"),
+        title: const Text("Test Instructions", style: TextStyle(color: Colors.white),),
         backgroundColor: Colors.transparent,
+        leading: IconButton(
+          onPressed: () {
+            Navigator.pop(context);
+          },
+          icon: Icon(Icons.arrow_back, color: Colors.white,),
+        ),
         elevation: 0,
-
         flexibleSpace: _gradientBg(),
       ),
       body: Stack(
         children: [
           _gradientBg(),
-    
+
           Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ===== RULES CARD =====
+                // ===== RULES =====
                 _glassCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: const [
                       Text(
-                        "Rules",
+                        "Important Instructions",
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      SizedBox(height: 12),
-                      Text("• No back navigation",
-                          style: TextStyle(color: Colors.white70)),
-                      Text("• Timer based quiz",
-                          style: TextStyle(color: Colors.white70)),
-                      Text("• Auto submit on timeout",
-                          style: TextStyle(color: Colors.white70)),
-                      Text("• Leaving app may submit quiz",
-                          style: TextStyle(color: Colors.white70)),
+                      SizedBox(height: 14),
+                      _Rule("This is a time-bound test"),
+                      _Rule("You cannot navigate back"),
+                      _Rule("Do not leave or minimize the app"),
+                      _Rule("Test auto-submits when time ends"),
                     ],
                   ),
                 ),
@@ -139,55 +137,54 @@ class _QuizRulesScreenState extends State<QuizRulesScreen> {
                 const SizedBox(height: 28),
 
                 // ===== COUNTDOWN =====
-                Center(
-                  child: _glassCard(
-                    child: Column(
-                      children: [
-                        Text(
-                          canStart
-                              ? "Quiz is live"
-                              : "Quiz starts in",
-                          style: const TextStyle(
-                            color: Colors.white70,
-                          ),
+                _glassCard(
+                  child: Column(
+                    children: [
+                      Text(
+                        canStart ? "TEST IS LIVE" : "TEST STARTS IN",
+                        style: TextStyle(
+                          color: canStart
+                              ? Colors.greenAccent
+                              : Colors.white70,
+                          fontWeight: FontWeight.bold,
                         ),
-                        const SizedBox(height: 10),
-                        Text(
-                          canStart ? "READY" : _format(remaining),
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            color: canStart
-                                ? Colors.greenAccent
-                                : Colors.redAccent,
-                          ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        canStart ? "READY" : _format(remaining),
+                        style: TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                          color: canStart
+                              ? Colors.greenAccent
+                              : Colors.redAccent,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-    
+
                 const Spacer(),
 
                 // ===== START BUTTON =====
                 SizedBox(
                   width: double.infinity,
-                  height: 50,
+                  height: 52,
                   child: ElevatedButton(
                     onPressed: canStart ? _confirmAndStart : null,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
+                      backgroundColor:
+                          canStart ? Colors.greenAccent : Colors.grey,
                       foregroundColor: Colors.black,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
                     child: Text(
-                      canStart
-                          ? "Join Quiz"
-                          : "Waiting for start time",
+                      canStart ? "START TEST" : "WAITING FOR START",
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
+                        fontSize: 16,
                       ),
                     ),
                   ),
@@ -206,8 +203,6 @@ class _QuizRulesScreenState extends State<QuizRulesScreen> {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
           colors: [
             Color(0xFF0F2027),
             Color(0xFF203A43),
@@ -224,11 +219,35 @@ class _QuizRulesScreenState extends State<QuizRulesScreen> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         color: Colors.white.withOpacity(0.12),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.25),
-        ),
+        border: Border.all(color: Colors.white.withOpacity(0.25)),
       ),
       child: child,
+    );
+  }
+}
+
+// ===== SMALL RULE WIDGET =====
+class _Rule extends StatelessWidget {
+  final String text;
+
+  const _Rule(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          const Icon(Icons.circle, size: 6, color: Colors.white70),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(color: Colors.white70),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

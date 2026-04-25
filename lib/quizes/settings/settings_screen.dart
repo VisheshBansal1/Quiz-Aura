@@ -1,3 +1,4 @@
+import 'package:QuizSphere/login/login_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -5,35 +6,56 @@ class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
   Future<void> _confirmLogout(BuildContext context) async {
-    final shouldLogout = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        title: const Text("Logout"),
-        content: const Text(
-          "Are you sure you want to logout?\n"
-          "You will need to sign in again to access quizzes.",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("Logout"),
-          ),
-        ],
+  final shouldLogout = await showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => AlertDialog(
+      title: const Text("Logout"),
+      content: const Text(
+        "Are you sure you want to logout?\n"
+        "You will need to sign in again to access quizzes.",
       ),
-    );
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text("Cancel"),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text("Logout"),
+        ),
+      ],
+    ),
+  );
 
-    if (shouldLogout == true) {
-      await FirebaseAuth.instance.signOut();
-      if (context.mounted) {
-        Navigator.popUntil(context, (route) => route.isFirst);
-      }
-    }
+  if (shouldLogout != true) return;
+
+  // 🔹 Show loading dialog
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const Center(
+      child: CircularProgressIndicator(),
+    ),
+  );
+
+  try {
+    await FirebaseAuth.instance.signOut();
+
+    if (!context.mounted) return;
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+  } catch (e) {
+    Navigator.pop(context); // remove loading
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Logout failed: $e")),
+    );
   }
+}
 
   @override
   Widget build(BuildContext context) {

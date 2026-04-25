@@ -1,151 +1,150 @@
+import 'package:QuizSphere/quizes/home/quiz_list_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:quiz_app/compiler/coding_quiz_screen.dart';
-import 'package:quiz_app/quizes/admin/screens/admin_dashboard_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-import 'home_page.dart';
-import 'history_screen.dart';
-import '../settings/settings_screen.dart';
+import 'topic_icon_mapper.dart';
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
-
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  int _index = 0;
-
-  final List<Widget> _pages = const [
-    HomePage(),
-    HistoryScreen(),
-    AdminDashboardScreen(), // 🔥 NEW
-  ];
-
-  final List<String> _titles = const [
-    "Quiz App",
-    "History",
-    "Admin Dashboard", // 🔥 NEW
-  ];
+class HomePage extends StatelessWidget {
+  const HomePage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        if (_index != 0) {
-          setState(() => _index = 0);
-          return false;
-        }
-        return true;
-      },
-      child: Scaffold(
-        extendBody: true,
-        backgroundColor: Colors.transparent,
-
-        // ===== APP BAR =====
-        appBar: AppBar(
-          elevation: 0,
-          backgroundColor: Colors.transparent,
-          title: Text(
-            _titles[_index],
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-              color: Colors.white
-            ),
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.settings, color: Colors.white,),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                );
-              },
-            ),
-          ],
-          flexibleSpace: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF0F2027),
-                  Color(0xFF203A43),
-                  Color(0xFF2C5364),
-                ],
-              ),
-            ),
-          ),
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
         ),
+      ),
+      child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance
+            .collection('topics')
+            .where('isActive', isEqualTo: true)
+            .orderBy('createdAt', descending: true) // 🔥 latest quiz first
+            .snapshots(),
+        builder: (context, snapshot) {
+          // Loading
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            );
+          }
 
-        // ===== BODY =====
-        body: IndexedStack(index: _index, children: _pages),
+          // Error
+          if (snapshot.hasError) {
+            return const Center(
+              child: Text(
+                "Failed to load quiz categories",
+                style: TextStyle(color: Colors.white70),
+              ),
+            );
+          }
 
-        // ===== FLOATING CREATE QUIZ BUTTON =====
-        floatingActionButton: _index == 0
-            ? FloatingActionButton.extended(
-                backgroundColor: Colors.white.withOpacity(0.95),
-                foregroundColor: Colors.black,
-                elevation: 8,
-                onPressed: () {
+          final docs = snapshot.data?.docs ?? [];
+
+          // Empty
+          if (docs.isEmpty) {
+            return const Center(
+              child: Text(
+                "No quiz categories available",
+                style: TextStyle(fontSize: 16, color: Colors.white70),
+              ),
+            );
+          }
+
+          return GridView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: docs.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 16,
+              crossAxisSpacing: 16,
+              childAspectRatio: 1.05,
+            ),
+            itemBuilder: (context, i) {
+              final doc = docs[i];
+              final data = doc.data();
+
+              final String topicId = doc.id;
+              final String title = data['title'] ?? 'Quiz';
+              final String subtitle = data['subtitle'] ?? '';
+              final String iconName = data['icon'] ?? 'quiz';
+
+              final icon = TopicIconMapper.fromString(iconName);
+
+              return InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const AdminDashboardScreen(),
+                      builder: (_) => QuizListScreen(
+                        topicId: topicId,
+                        topicTitle: title,
+                      ),
                     ),
                   );
                 },
-                icon: const Icon(Icons.add),
-                label: const Text(
-                  "Create Quiz",
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              )
-            : null,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    color: Colors.white.withOpacity(0.12),
+                    border: Border.all(color: Colors.white.withOpacity(0.25)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.25),
+                        blurRadius: 16,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Icon
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withOpacity(0.18),
+                        ),
+                        child: Icon(icon, size: 30, color: Colors.white),
+                      ),
 
-        floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+                      const SizedBox(height: 14),
 
-        // ===== BOTTOM NAV BAR =====
-        bottomNavigationBar: Container(
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            color: Colors.white.withOpacity(0.12),
-            border: Border.all(color: Colors.white.withOpacity(0.25)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 16,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: BottomNavigationBar(
-              currentIndex: _index,
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              type: BottomNavigationBarType.fixed,
-              selectedItemColor: Colors.white,
-              unselectedItemColor: Colors.white60,
-              onTap: (i) {
-                if (i != _index) {
-                  setState(() => _index = i);
-                }
-              },
-              items: const [
-                BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.history),
-                  label: "History",
+                      // Title
+                      Text(
+                        title,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+
+                      if (subtitle.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          subtitle,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-              ],
-            ),
-          ),
-        ),
+              );
+            },
+          );
+        },
       ),
     );
   }

@@ -40,20 +40,32 @@ class _JoinQuizScreenState extends State<JoinQuizScreen> {
       final snap = await FirebaseFirestore.instance
           .collection('quizzes')
           .where('joinCode', isEqualTo: code)
-          .where('isActive', isEqualTo: true)
           .limit(1)
           .get();
 
       if (!mounted) return;
 
       if (snap.docs.isEmpty) {
-        _error("Invalid or expired join code");
+        _error("Invalid join code");
         return;
       }
 
       final doc = snap.docs.first;
       final data = doc.data();
       final quizId = doc.id;
+
+      final bool isActive = data['isActive'] ?? true;
+
+      if (!isActive) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                QuizEndedScreen(quizTitle: data['title'] ?? "Quiz"),
+          ),
+        );
+        return;
+      }
 
       if (data['startAt'] == null || data['endAt'] == null) {
         _error("Quiz timing not configured");
@@ -64,18 +76,29 @@ class _JoinQuizScreenState extends State<JoinQuizScreen> {
       final DateTime startAt = (data['startAt'] as Timestamp).toDate();
       final DateTime endAt = (data['endAt'] as Timestamp).toDate();
 
-      // ⛔ QUIZ ENDED
+      // ===== QUIZ ENDED =====
       if (now.isAfter(endAt)) {
+        try {
+          await FirebaseFirestore.instance
+              .collection('quizzes')
+              .doc(quizId)
+              .update({
+            "isActive": false,
+          });
+        } catch (_) {}
+
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => QuizEndedScreen(quizTitle: data['title'] ?? "Quiz"),
+            builder: (_) =>
+                QuizEndedScreen(quizTitle: data['title'] ?? "Quiz"),
           ),
         );
+
         return;
       }
 
-      // ⏳ QUIZ NOT STARTED → RULES SCREEN
+      // ===== QUIZ NOT STARTED =====
       if (now.isBefore(startAt)) {
         Navigator.pushReplacement(
           context,
@@ -86,22 +109,34 @@ class _JoinQuizScreenState extends State<JoinQuizScreen> {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(
-                    builder: (_) =>
-                        QuizAttemptScreen(quizId: quizId, endAt: endAt),
+                    builder: (_) => QuizAttemptScreen(
+                      quizId:     quizId,
+                      endAt:      endAt,
+                      isDaily:    false,
+                      topicId:    quizId,
+                      topicTitle: data['title'] ?? '',
+                    ),
                   ),
                 );
               },
             ),
           ),
         );
-        return; // 🔒 CRITICAL
+
+        return;
       }
 
-      // ✅ QUIZ LIVE → DIRECT START
+      // ===== QUIZ LIVE =====
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => QuizAttemptScreen(quizId: quizId, endAt: endAt),
+          builder: (_) => QuizAttemptScreen(
+            quizId:     quizId,
+            endAt:      endAt,
+            isDaily:    false,
+            topicId:    quizId,
+            topicTitle: data['title'] ?? '',
+          ),
         ),
       );
     } catch (e) {
@@ -113,7 +148,9 @@ class _JoinQuizScreenState extends State<JoinQuizScreen> {
 
   void _error(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
   }
 
   @override

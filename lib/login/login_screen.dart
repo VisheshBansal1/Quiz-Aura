@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:QuizSphere/quizes/home/onboarding_screen.dart';
+import 'package:QuizSphere/quizes/admin/screens/admin_daily_quiz_screen.dart';
 
-import '../quizes/auth/auth_service.dart';
+import 'auth/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,6 +18,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final auth = AuthService();
 
   bool loading = false;
+  bool isPasswordVisible = false;
 
   @override
   void dispose() {
@@ -37,9 +41,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => loading = true);
     try {
-      await auth.loginWithEmail(email, pass);
-      // 🔥 STOP HERE
-      // Navigation handled by authStateChanges()
+      final user = await auth.loginWithEmail(email, pass);
+      if (!mounted) return;
+      _navigateHome(user);
     } catch (e) {
       _error(e.toString().replaceFirst("Exception: ", ""));
     } finally {
@@ -53,12 +57,27 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => loading = true);
     try {
-      await auth.loginWithGoogle();
+      final user = await auth.loginWithGoogle();
+      if (!mounted) return;
+      _navigateHome(user);
     } catch (e) {
       _error(e.toString().replaceFirst("Exception: ", ""));
     } finally {
       if (mounted) setState(() => loading = false);
     }
+  }
+
+  void _navigateHome(User user) {
+    Widget destination;
+    if (user.email == 'admin741@gmail.com') {
+      destination = const AdminDailyQuizManagerScreen();
+    } else {
+      destination = const HomeScreen();
+    }
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => destination),
+      (_) => false,
+    );
   }
 
   void _error(String msg) {
@@ -148,7 +167,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     // ===== Password =====
                     TextField(
                       controller: passCtrl,
-                      obscureText: true,
+                      obscureText: !isPasswordVisible,
                       style: const TextStyle(color: Colors.white),
                       decoration: InputDecoration(
                         prefixIcon: const Icon(
@@ -162,6 +181,21 @@ class _LoginScreenState extends State<LoginScreen> {
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                           borderSide: BorderSide.none,
+                        ),
+
+                        // 👇 THIS IS THE MAIN PART (EYE ICON)
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            isPasswordVisible
+                                ? Icons.visibility
+                                : Icons.visibility_off,
+                            color: Colors.white70,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              isPasswordVisible = !isPasswordVisible;
+                            });
+                          },
                         ),
                       ),
                     ),

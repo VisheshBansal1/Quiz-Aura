@@ -1,15 +1,51 @@
 class Language {
   final String name;
-  final int id;
+  final String pistonKey;
+  final String version;
 
-  const Language(this.name, this.id);
+  const Language({
+    required this.name,
+    required this.pistonKey,
+    required this.version,
+  });
 }
 
-const Map<String, int> languageIds = {
-  "C": 50,
-  "C++": 54,
-  "Java": 62,
-  "Python": 71,
-  "JavaScript": 63,
-};
+const List<Language> supportedLanguages = [
+  Language(
+    name: "C++",
+    pistonKey: "cpp",
+    version: "10.2.0",
+  ),
+  Language(
+    name: "Java",
+    pistonKey: "java",
+    version: "15.0.2",
+  ),
+  Language(
+    name: "Python",
+    pistonKey: "python",
+    version: "3.10.0",
+  ),
+  Language(
+    name: "JavaScript",
+    pistonKey: "javascript",
+    version: "18.15.0",
+  ),
+];
 
+extension LanguageFile on Language {
+  String get fileName {
+    switch (pistonKey) {
+      case 'cpp':
+        return 'main.cpp';
+      case 'java':
+        return 'Main.java';
+      case 'python':
+        return 'main.py';
+      case 'javascript':
+        return 'main.js';
+      default:
+        return 'main';
+    }
+  }
+}

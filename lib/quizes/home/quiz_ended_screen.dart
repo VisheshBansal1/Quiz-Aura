@@ -10,8 +10,8 @@ class QuizEndedScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async => false,
+    return PopScope(
+      canPop: false,
       child: Scaffold(
         backgroundColor: Colors.black,
         appBar: AppBar(

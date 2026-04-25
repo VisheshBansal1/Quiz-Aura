@@ -1,6 +1,6 @@
+import 'package:QuizSphere/quizes/admin/services/Admin_quiz_service.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:quiz_app/quizes/admin/services/admin_quiz_service.dart';
 
 import 'add_question_screen.dart';
 import 'ai_generate_questions_screen.dart';
@@ -20,7 +20,9 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
 
   final AdminQuizService service = AdminQuizService();
 
-  String? selectedTopic;
+  String? selectedTopicId;
+  String? selectedTopicTitle;
+
   bool isPrivate = false;
   bool showCreateTopic = false;
 
@@ -39,10 +41,10 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
     super.dispose();
   }
 
-  // ---------------- CREATE / USE TOPIC ----------------
-  Future<void> _createTopic() async {
-    final name = topicCtrl.text.trim();
+  // ================= TOPIC =================
 
+  Future<void> _createOrSelectTopic() async {
+    final name = topicCtrl.text.trim();
     if (name.isEmpty) {
       _error("Topic name required");
       return;
@@ -51,7 +53,6 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
     final normalized = name.toLowerCase();
 
     try {
-      // 🔍 1. Check if topic already exists
       final existing = await FirebaseFirestore.instance
           .collection('topics')
           .where('normalizedTitle', isEqualTo: normalized)
@@ -59,66 +60,88 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
           .get();
 
       if (existing.docs.isNotEmpty) {
-        // ✅ Topic exists → USE it
+        final doc = existing.docs.first;
         setState(() {
-          selectedTopic = existing.docs.first['title'];
+          selectedTopicId = doc.id;
+          selectedTopicTitle = doc['title'];
           showCreateTopic = false;
           topicCtrl.clear();
         });
         return;
       }
 
-      // 🆕 2. Create new topic
-      await FirebaseFirestore.instance.collection('topics').add({
+      final doc = await FirebaseFirestore.instance.collection('topics').add({
         'title': name,
-        'normalizedTitle': normalized, // 🔑 critical
+        'normalizedTitle': normalized,
         'isActive': true,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
       setState(() {
-        selectedTopic = name;
+        selectedTopicId = doc.id;
+        selectedTopicTitle = name;
         showCreateTopic = false;
         topicCtrl.clear();
       });
-    } catch (e) {
-      _error("Failed to create or fetch topic");
+    } catch (_) {
+      _error("Failed to create topic");
     }
   }
+
+  // ================= QUIZ =================
 
   Future<void> _createQuiz() async {
     if (loading || quizId != null) return;
 
-    final form = _formKey.currentState;
-    if (form == null) {
-      _error("Form not initialized");
+    if (!_formKey.currentState!.validate()) {
+      _error("Fix form errors");
       return;
     }
 
-    if (!form.validate()) {
-      _error("Please fix form errors");
-      return;
-    }
-
-    final topic = selectedTopic?.trim();
-    if (topic == null || topic.isEmpty) {
-      _error("Please select or create a topic");
+    if (selectedTopicId == null) {
+      _error("Select or create topic");
       return;
     }
 
     if (startTime == null) {
-      _error("Please select quiz start time");
-      return;
+      final instant = await showDialog<bool>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF203A43),
+            title: const Text(
+              "Start Instantly?",
+              style: TextStyle(color: Colors.white),
+            ),
+            content: const Text(
+              "You did not select start time.\nDo you want to start the quiz instantly?",
+              style: TextStyle(color: Colors.white70),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text(
+                  "No",
+                  style: TextStyle(color: Colors.redAccent),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text("Yes"),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (instant != true) return;
+
+      startTime = DateTime.now().add(const Duration(seconds: 60));
     }
 
     final now = DateTime.now();
     if (startTime!.isBefore(now.add(const Duration(seconds: 30)))) {
-      _error("Quiz start time must be in the future");
-      return;
-    }
-
-    if (durationMinutes <= 0) {
-      _error("Quiz duration must be greater than 0");
+      _error("Start time must be in future");
       return;
     }
 
@@ -127,42 +150,24 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
     try {
       final endTime = startTime!.add(Duration(minutes: durationMinutes));
 
-      debugPrint("Creating quiz:");
-      debugPrint("Title: ${titleCtrl.text}");
-      debugPrint("Topic: $topic");
-      debugPrint("Start: $startTime");
-      debugPrint("End: $endTime");
-
       final result = await service.createQuiz(
         title: titleCtrl.text.trim(),
-        topic: selectedTopic!.trim(),
+        topicId: selectedTopicId!,
+        topicTitle: selectedTopicTitle!,
         isPrivate: isPrivate,
         startAt: startTime!,
         endAt: endTime,
         durationMinutes: durationMinutes,
       );
 
-      // ✅ VALIDATION THAT MAKES SENSE
-      if (result['quizId'] == null) {
-        throw Exception("Quiz creation failed.");
-      }
-
-      if (isPrivate && result['joinCode'] == null) {
-        throw Exception("Join code missing for private quiz.");
-      }
-
-      setState(() {
-        quizId = result['quizId'] as String;
-        joinCode = result['joinCode']; // can be null for public
-      });
-    } catch (e, st) {
-      debugPrint("CREATE QUIZ FAILED");
-      debugPrint(e.toString());
-      debugPrintStack(stackTrace: st);
-
-      _error(e.toString().replaceFirst("Exception: ", "").trim());
+      quizId = result['quizId'];
+      joinCode = result['joinCode'];
+      setState(() {});
+    } catch (e) {
+      _error(e.toString());
     } finally {
-      if (mounted) setState(() => loading = false);
+      loading = false;
+      setState(() {});
     }
   }
 
@@ -170,287 +175,189 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  // ---------------- UI ----------------
+  // ================= UI =================
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: const Text("Create Quiz", style: TextStyle(color: Colors.white)),
-        backgroundColor: Colors.transparent,
-        leading: IconButton(
-          onPressed: () {
-            Navigator.pop(context);
-          },
-          icon: Icon(Icons.arrow_back, color: Colors.white,),
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
         ),
-        elevation: 0,
-        flexibleSpace: _gradientBg(),
       ),
-      body: Stack(
-        children: [
-          // ===== BACKGROUND =====
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF0F2027),
-                  Color(0xFF203A43),
-                  Color(0xFF2C5364),
-                ],
-              ),
-            ),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: const Text(
+            "Create Quiz",
+            style: TextStyle(color: Colors.white),
           ),
-
-          SafeArea(
-            child: SingleChildScrollView(
+          backgroundColor: Colors.transparent,
+          leading: IconButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            icon: Icon(Icons.arrow_back, color: Colors.white),
+          ),
+          elevation: 0,
+        ),
+        body: Stack(
+          children: [
+            SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Form(
                 key: _formKey,
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // ===== HEADER =====
-                    const Text(
-                      "Create Quiz",
-                      style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      "Configure quiz details and timing",
-                      style: TextStyle(color: Colors.white70),
+                    _glassInput(
+                      controller: titleCtrl,
+                      label: "Quiz Title",
+                      validator: (v) =>
+                          v == null || v.isEmpty ? "Required" : null,
                     ),
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
 
-                    // ===== QUIZ DETAILS CARD =====
-                    _glassCard(
-                      child: Column(
-                        children: [
-                          _glassInput(
-                            enabled: quizId == null,
-                            controller: titleCtrl,
-                            label: "Quiz Title",
-                            validator: (v) => v == null || v.trim().isEmpty
-                                ? "Title required"
-                                : null,
-                          ),
+                    if (quizId == null)
+                      StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('topics')
+                            .where('isActive', isEqualTo: true)
+                            .orderBy(
+                              'createdAt',
+                              descending: true,
+                            ) // newest topic first
+                            .snapshots(),
+                        builder: (c, s) {
+                          if (!s.hasData) {
+                            return const CircularProgressIndicator();
+                          }
 
-                          const SizedBox(height: 16),
+                          final topics = s.data!.docs;
 
-                          if (quizId == null)
-                            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                              stream: FirebaseFirestore.instance
-                                  .collection('topics')
-                                  .where('isActive', isEqualTo: true)
-                                  .snapshots(),
-                              builder: (context, snapshot) {
-                                if (!snapshot.hasData) {
-                                  return const CircularProgressIndicator(
-                                    color: Colors.white,
-                                  );
-                                }
-
-                                final topics = snapshot.data!.docs
-                                    .map((d) => d.data()['title'] as String)
-                                    .toList();
-
-                                if (topics.isEmpty || showCreateTopic) {
-                                  return Column(
-                                    children: [
-                                      _glassInput(
-                                        controller: topicCtrl,
-                                        label: "New Topic",
-                                      ),
-                                      const SizedBox(height: 8),
-                                      ElevatedButton(
-                                        onPressed: _createTopic,
-                                        child: const Text("Create Topic"),
-                                      ),
-                                    ],
-                                  );
-                                }
-
-                                return Column(
-                                  children: [
-                                    DropdownButtonFormField<String>(
-                                      dropdownColor: const Color(0xFF203A43),
-                                      value: topics.contains(selectedTopic)
-                                          ? selectedTopic
-                                          : null,
-                                      hint: const Text(
-                                        "Select Topic",
-                                        style: TextStyle(color: Colors.white70),
-                                      ),
-                                      items: topics
-                                          .map(
-                                            (t) => DropdownMenuItem(
-                                              value: t,
-                                              child: Text(
-                                                t,
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                ),
-                                              ),
-                                            ),
-                                          )
-                                          .toList(),
-                                      onChanged: (v) =>
-                                          setState(() => selectedTopic = v),
-                                      validator: (v) =>
-                                          v == null ? "Select topic" : null,
-                                    ),
-                                    TextButton(
-                                      onPressed: () => setState(
-                                        () => showCreateTopic = true,
-                                      ),
-                                      child: const Text("+ Create new topic"),
-                                    ),
-                                  ],
-                                );
-                              },
-                            ),
-
-                          const SizedBox(height: 16),
-
-                          // ===== TIME =====
-                          ListTile(
-                            title: Text(
-                              startTime == null
-                                  ? "Select Quiz Start Time"
-                                  : "Starts at: ${startTime!.toLocal()}",
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                            trailing: const Icon(
-                              Icons.schedule,
-                              color: Colors.white,
-                            ),
-                            onTap: quizId == null
-                                ? () async {
-                                    final now = DateTime.now();
-                                    final date = await showDatePicker(
-                                      context: context,
-                                      initialDate: now,
-                                      firstDate: now,
-                                      lastDate: now.add(
-                                        const Duration(days: 30),
-                                      ),
-                                    );
-                                    if (date == null) return;
-
-                                    final time = await showTimePicker(
-                                      context: context,
-                                      initialTime: TimeOfDay.now(),
-                                    );
-                                    if (time == null) return;
-
-                                    setState(() {
-                                      startTime = DateTime(
-                                        date.year,
-                                        date.month,
-                                        date.day,
-                                        time.hour,
-                                        time.minute,
-                                      );
-                                    });
-                                  }
-                                : null,
-                          ),
-
-                          const SizedBox(height: 12),
-
-                          _glassInput(
-                            label: "Duration (minutes)",
-                            initialValue: "30",
-                            keyboardType: TextInputType.number,
-                            onChanged: (v) =>
-                                durationMinutes = int.tryParse(v) ?? 30,
-                            validator: (v) {
-                              final m = int.tryParse(v ?? "");
-                              return m == null || m < 1
-                                  ? "Invalid duration"
-                                  : null;
-                            },
-                          ),
-
-                          const SizedBox(height: 12),
-
-                          SwitchListTile(
-                            title: const Text(
-                              "Private Quiz",
-                              style: TextStyle(color: Colors.white),
-                            ),
-                            subtitle: const Text(
-                              "Requires join code",
-                              style: TextStyle(color: Colors.white70),
-                            ),
-                            value: isPrivate,
-                            onChanged: quizId == null
-                                ? (v) => setState(() => isPrivate = v)
-                                : null,
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // ===== CREATE BUTTON =====
-                    SizedBox(
-                      height: 52,
-                      child: ElevatedButton(
-                        onPressed: quizId == null ? _createQuiz : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.black,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: const Text(
-                          "Create Quiz",
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-
-                    // ===== AFTER CREATE =====
-                    if (quizId != null) ...[
-                      const SizedBox(height: 32),
-
-                      if (joinCode != null)
-                        _glassCard(
-                          child: Column(
-                            children: [
-                              const Text(
-                                "JOIN CODE",
-                                style: TextStyle(color: Colors.white70),
-                              ),
-                              const SizedBox(height: 8),
-                              SelectableText(
-                                joinCode!,
-                                style: const TextStyle(
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 3,
-                                  color: Colors.white,
+                          if (topics.isEmpty || showCreateTopic) {
+                            return Column(
+                              children: [
+                                _glassInput(
+                                  controller: topicCtrl,
+                                  label: "New Topic",
                                 ),
+                                ElevatedButton(
+                                  onPressed: _createOrSelectTopic,
+                                  child: const Text("Create Topic"),
+                                ),
+                              ],
+                            );
+                          }
+
+                          return Column(
+                            children: [
+                              DropdownButtonFormField<String>(
+                                dropdownColor: const Color(0xFF203A43),
+                                value: selectedTopicId,
+                                hint: const Text(
+                                  "Select Topic",
+                                  style: TextStyle(color: Colors.white70),
+                                ),
+                                items: topics.map((d) {
+                                  return DropdownMenuItem(
+                                    value: d.id,
+                                    child: Text(
+                                      d['title'],
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (v) {
+                                  final doc = topics.firstWhere(
+                                    (d) => d.id == v,
+                                  );
+                                  setState(() {
+                                    selectedTopicId = doc.id;
+                                    selectedTopicTitle = doc['title'];
+                                  });
+                                },
+                              ),
+                              TextButton(
+                                onPressed: () =>
+                                    setState(() => showCreateTopic = true),
+                                child: const Text("+ Create new topic"),
                               ),
                             ],
+                          );
+                        },
+                      ),
+
+                    const SizedBox(height: 16),
+
+                    ListTile(
+                      title: Text(
+                        startTime == null
+                            ? "Select Start Time"
+                            : startTime.toString(),
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      trailing: const Icon(Icons.schedule, color: Colors.white),
+                      onTap: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: DateTime.now(),
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime.now().add(
+                            const Duration(days: 30),
                           ),
-                        ),
+                        );
+                        if (date == null) return;
 
-                      const SizedBox(height: 16),
+                        final time = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay.now(),
+                        );
+                        if (time == null) return;
 
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.add),
-                        label: const Text("Add Questions"),
+                        setState(() {
+                          startTime = DateTime(
+                            date.year,
+                            date.month,
+                            date.day,
+                            time.hour,
+                            time.minute,
+                          );
+                        });
+                      },
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    _glassInput(
+                      label: "Duration (minutes)",
+                      initialValue: "30",
+                      keyboardType: TextInputType.number,
+                      onChanged: (v) => durationMinutes = int.tryParse(v) ?? 30,
+                    ),
+
+                    // SwitchListTile(
+                    //   title: const Text(
+                    //     "Private Quiz",
+                    //     style: TextStyle(color: Colors.white),
+                    //   ),
+                    //   value: isPrivate,
+                    //   onChanged: (v) => setState(() => isPrivate = v),
+                    // ),
+                    const SizedBox(height: 16),
+
+                    ElevatedButton(
+                      onPressed: quizId == null ? _createQuiz : null,
+                      child: const Text("Create Quiz"),
+                    ),
+
+                    if (quizId != null) ...[
+                      const SizedBox(height: 20),
+                      ElevatedButton(
                         onPressed: () {
                           Navigator.push(
                             context,
@@ -460,60 +367,45 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
                             ),
                           );
                         },
+                        child: const Text("Add Questions"),
                       ),
-
-                      const SizedBox(height: 12),
-
-                      OutlinedButton.icon(
-                        icon: const Icon(Icons.auto_awesome),
-                        label: const Text("Generate with AI"),
+                      SizedBox(height: 20),
+                      ElevatedButton(
                         onPressed: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (_) =>
                                   AiGenerateQuestionsScreen(quizId: quizId!),
+                                  
                             ),
                           );
                         },
+                        child: const Text("Generate with AI"),
                       ),
                     ],
                   ],
                 ),
               ),
             ),
-          ),
-
-          if (loading)
-            Container(
-              color: Colors.black.withOpacity(0.4),
-              child: const Center(
-                child: CircularProgressIndicator(color: Colors.white),
+            if (loading)
+              Container(
+                color: Colors.black45,
+                child: const Center(child: CircularProgressIndicator()),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-Widget _glassCard({required Widget child}) {
-  return Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(20),
-      color: Colors.white.withOpacity(0.12),
-      border: Border.all(color: Colors.white.withOpacity(0.25)),
-    ),
-    child: child,
-  );
-}
+// ================= HELPERS =================
 
 Widget _glassInput({
   TextEditingController? controller,
   String? initialValue,
   required String label,
-  bool enabled = true,
   TextInputType? keyboardType,
   FormFieldValidator<String>? validator,
   ValueChanged<String>? onChanged,
@@ -521,7 +413,6 @@ Widget _glassInput({
   return TextFormField(
     controller: controller,
     initialValue: initialValue,
-    enabled: enabled,
     keyboardType: keyboardType,
     validator: validator,
     onChanged: onChanged,
@@ -534,20 +425,6 @@ Widget _glassInput({
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide.none,
-      ),
-    ),
-  );
-}
-
-// ================= WIDGET BUILDERS =================
-
-Widget _gradientBg() {
-  return Container(
-    decoration: const BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
       ),
     ),
   );
