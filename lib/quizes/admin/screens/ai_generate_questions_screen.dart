@@ -122,6 +122,9 @@ class _AiGenerateQuestionsScreenState
 
   Future<void> _doGenerate() async {
     if (loading || topicTitle == null) return;
+    // FIX 3: Set loading=true BEFORE the async call so the overlay appears
+    // and duplicate taps are blocked.
+    setState(() => loading = true);
     try {
       final result = await groqAIService.generateMCQs(
         topic: topicTitle!,

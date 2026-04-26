@@ -8,13 +8,16 @@ class GroqAIService {
 
   final String _apiKey;
 
-  // FIX: Constructor no longer throws when the key is missing.
-  // On Flutter web, dotenv may not be loaded yet (or the .env file may be
-  // missing from the web assets). Throwing here crashes the screen before
-  // the user can see any error UI. Instead we store an empty key and let
-  // generateMCQs() surface a clean error.
+  // FIX 1: Strip surrounding quotes AND whitespace from the key.
+  // If .env has:  Quiz_API="gsk_xxx"  or  Quiz_API='gsk_xxx'
+  // dotenv returns the value WITH the quotes → causes 401 Invalid API Key.
   GroqAIService()
-    : _apiKey = dotenv.maybeGet('Quiz_API') ?? dotenv.env['Quiz_API'] ?? '';
+    : _apiKey = _sanitizeKey(
+        dotenv.maybeGet('Quiz_API') ?? dotenv.env['Quiz_API'] ?? '',
+      );
+
+  static String _sanitizeKey(String raw) =>
+      raw.trim().replaceAll('"', '').replaceAll("'", '');
 
   bool get isConfigured => _apiKey.isNotEmpty;
 
@@ -23,8 +26,6 @@ class GroqAIService {
     required String difficulty,
     int count = 5,
   }) async {
-    // FIX: Return a clear error entry (not the silent fallback) when the key
-    // is absent. The screen can check for this and show a proper message.
     if (_apiKey.isEmpty) {
       throw Exception(
         'AI API key (Quiz_API) is not configured.\n'
@@ -32,9 +33,10 @@ class GroqAIService {
       );
     }
 
-    final prompt = '''
-Generate \$count UNIQUE multiple-choice questions on topic "\$topic".
-Difficulty: \$difficulty.
+    final prompt =
+        '''
+Generate $count UNIQUE multiple-choice questions on topic "$topic".
+Difficulty: $difficulty.
 
 Rules:
 - Return ONLY a valid JSON array.
@@ -61,7 +63,7 @@ JSON format:
       final response = await http.post(
         Uri.parse(_endpoint),
         headers: {
-          "Authorization": "Bearer \$_apiKey",
+          "Authorization": "Bearer $_apiKey",
           "Content-Type": "application/json",
         },
         body: jsonEncode({
@@ -74,19 +76,20 @@ JSON format:
         }),
       );
 
-      // FIX: surface specific HTTP errors instead of silently falling back,
-      // so the developer (and user) knows what went wrong.
       if (response.statusCode == 401) {
-        throw Exception('Invalid API key. Check Quiz_API in your .env file.');
+        throw Exception(
+          'Invalid API key. Check Quiz_API in your .env file.\n'
+          'Tip: No quotes around the value. Example:\n  Quiz_API=gsk_yourKeyHere',
+        );
       }
       if (response.statusCode == 429) {
         throw Exception(
-          'Groq API rate limit reached. Please wait a moment and try again.',
+          'Groq API rate limit reached. Please wait and try again.',
         );
       }
       if (response.statusCode != 200) {
         throw Exception(
-          'Groq API error \${response.statusCode}: \${response.body}',
+          'Groq API error ${response.statusCode}: ${response.body}',
         );
       }
 
@@ -100,15 +103,9 @@ JSON format:
       final cleanJson = _extractJson(content);
       return _safeParseQuestions(cleanJson);
     } on Exception {
-      rethrow; // propagate our clean exceptions to the UI
+      rethrow;
     } catch (e) {
-      // FIX: wrap unknown errors (e.g. SocketException on web CORS) with
-      // a helpful message so the catch in the screen can display it.
-      throw Exception(
-        'Could not reach AI service.\n'
-        'On web, ensure the Groq API allows your origin (CORS), '
-        'or use a backend proxy function.\nDetail: \$e',
-      );
+      throw Exception('Could not reach AI service. Detail: $e');
     }
   }
 
@@ -123,36 +120,25 @@ JSON format:
 
   List<Map<String, dynamic>> _safeParseQuestions(String raw) {
     final parsed = jsonDecode(raw);
-
-    if (parsed is! List) {
-      throw Exception("Response is not a JSON array");
-    }
+    if (parsed is! List) throw Exception("Response is not a JSON array");
 
     return parsed.map<Map<String, dynamic>>((q) {
-      if (q is! Map<String, dynamic>) {
+      if (q is! Map<String, dynamic>)
         throw Exception("Invalid question object");
-      }
 
       final question = q['question'];
       final options = q['options'];
       final correctIndex = q['correctIndex'];
       final solution = q['solution'];
 
-      if (question is! String || question.isEmpty) {
+      if (question is! String || question.isEmpty)
         throw Exception("Invalid question text");
-      }
-
-      if (options is! List || options.length != 4) {
+      if (options is! List || options.length != 4)
         throw Exception("Invalid options — need exactly 4");
-      }
-
-      if (correctIndex is! int || correctIndex < 0 || correctIndex > 3) {
+      if (correctIndex is! int || correctIndex < 0 || correctIndex > 3)
         throw Exception("Invalid correctIndex");
-      }
-
-      if (solution is! String || solution.trim().length < 10) {
+      if (solution is! String || solution.trim().length < 10)
         throw Exception("Invalid solution text");
-      }
 
       return {
         'question': question,

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 
@@ -14,13 +15,13 @@ class FcmService {
     // Request permission (iOS + Android 13+)
     await _messaging.requestPermission(alert: true, badge: true, sound: true);
 
-    // Register background handler
+    // FIX: Register background handler BEFORE any other FCM setup.
+    // The handler must be a top-level function (it is).
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
     // Handle foreground messages
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       debugPrint('[FCM] Foreground: ${message.notification?.title}');
-      // TODO: Show in-app snackbar/overlay using navigatorKey
     });
 
     // Save token when user logs in
@@ -43,13 +44,11 @@ class FcmService {
       if (token == null) return;
       await _persistToken(uid, token);
     } catch (e) {
-      // Silently ignored on web or when FCM is unavailable
       debugPrint('[FCM] Token save failed: $e');
     }
   }
 
   static Future<void> _persistToken(String uid, String token) async {
-    // FIX 7: use set(merge:true) — .update() throws if doc doesn't exist yet
     await _db.collection('users').doc(uid).set({
       'fcmToken': token,
       'fcmTokenUpdated': FieldValue.serverTimestamp(),
@@ -57,12 +56,11 @@ class FcmService {
   }
 
   /// Write a notification record to Firestore for the target user.
-  /// The actual push is sent server-side (Cloud Function or Admin SDK).
   static Future<void> createNotification({
     required String targetUid,
     required String title,
     required String body,
-    required String type, // 'battle_invite' | 'tournament' | 'result' | 'badge'
+    required String type,
     Map<String, dynamic> metadata = const {},
   }) async {
     await _db
@@ -106,8 +104,16 @@ class FcmService {
   }
 }
 
-/// Top-level function required by FCM background handler.
+/// Top-level FCM background handler.
+/// FIX: Must call Firebase.initializeApp() because background messages
+/// run in a SEPARATE Dart isolate where Firebase is not initialized.
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // FIX: Initialize Firebase in the background isolate if not already done.
+  try {
+    await Firebase.initializeApp();
+  } catch (_) {
+    // Already initialized — safe to ignore.
+  }
   debugPrint('[FCM] Background: ${message.notification?.title}');
 }

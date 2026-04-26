@@ -81,66 +81,82 @@ class _DailyQuizDetailScreenState extends State<DailyQuizDetailScreen> {
   }
 
   Future<void> _loadQuiz() async {
-  try {
-    final user = FirebaseAuth.instance.currentUser;
-    final quizId = getTodayQuizId();
+    // FIX: All setState() calls guarded with !mounted to prevent
+    // "setState called after dispose" crashes.
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final quizId = getTodayQuizId();
 
-    final quizRef =
-        FirebaseFirestore.instance.collection('dailyQuizzes').doc(quizId);
+      final quizRef = FirebaseFirestore.instance
+          .collection('dailyQuizzes')
+          .doc(quizId);
 
-    final quizSnap = await quizRef.get();
+      final quizSnap = await quizRef.get();
 
-    if (!quizSnap.exists) {
+      if (!mounted) return; // FIX: guard after every await
+
+      if (!quizSnap.exists) {
+        setState(() {
+          quizData = null;
+          loading = false;
+        });
+        return;
+      }
+
+      final data = quizSnap.data()!;
+
+      // FIX: Null-safe Timestamp cast — if 'publishAt' is missing from
+      // Firestore the old force-cast `as Timestamp` threw a TypeError crash.
+      final publishAtRaw = data['publishAt'];
+      if (publishAtRaw == null || publishAtRaw is! Timestamp) {
+        // Missing/bad publishAt field — treat as unpublished.
+        if (!mounted) return;
+        setState(() {
+          quizData = null;
+          loading = false;
+        });
+        return;
+      }
+      final publishAt = publishAtRaw.toDate();
+      final now = DateTime.now();
+
+      if (data['isPublished'] != true || now.isBefore(publishAt)) {
+        if (!mounted) return;
+        setState(() {
+          quizData = null;
+          loading = false;
+        });
+        return;
+      }
+
+      bool played = false;
+      int count = 0;
+
+      if (user != null) {
+        final attemptSnap = await quizRef
+            .collection('leaderboard')
+            .doc(user.uid)
+            .get();
+
+        final countSnap = await quizRef.collection('leaderboard').count().get();
+
+        played = attemptSnap.exists;
+        count = countSnap.count ?? 0;
+      }
+
+      if (!mounted) return; // FIX: guard after every await
+
       setState(() {
-        quizData = null;
+        quizData = data;
+        alreadyPlayed = played;
+        playersToday = count;
         loading = false;
       });
-      return;
+    } catch (e) {
+      if (!mounted) return; // FIX: guard in catch block too
+      setState(() => loading = false);
     }
-
-    final data = quizSnap.data()!;
-
-    final publishAt = (data['publishAt'] as Timestamp).toDate();
-    final now = DateTime.now();
-
-    // ❌ Only block if not yet published
-    if (data['isPublished'] != true || now.isBefore(publishAt)) {
-      setState(() {
-        quizData = null;
-        loading = false;
-      });
-      return;
-    }
-
-    // ✅ DO NOT CHECK EXPIRE HERE
-    // Expiry handled in build (practice mode)
-
-    bool played = false;
-    int count = 0;
-
-    if (user != null) {
-      final attemptSnap = await quizRef
-          .collection('leaderboard')
-          .doc(user.uid)
-          .get();
-
-      final countSnap =
-          await quizRef.collection('leaderboard').count().get();
-
-      played = attemptSnap.exists;
-      count = countSnap.count ?? 0;
-    }
-
-    setState(() {
-      quizData = data;
-      alreadyPlayed = played;
-      playersToday = count;
-      loading = false;
-    });
-  } catch (e) {
-    setState(() => loading = false);
   }
-}
 
   String _timeLeft(Timestamp expiresAt) {
     final now = DateTime.now().toUtc();
@@ -155,9 +171,7 @@ class _DailyQuizDetailScreenState extends State<DailyQuizDetailScreen> {
     final quizId = getTodayQuizId();
 
     if (loading) {
-      return Scaffold(
-        body: DailyQuizEntryScreen.gradientBg(),
-      );
+      return Scaffold(body: DailyQuizEntryScreen.gradientBg());
     }
 
     return Scaffold(
@@ -180,10 +194,7 @@ class _DailyQuizDetailScreenState extends State<DailyQuizDetailScreen> {
                 ? const Center(
                     child: Text(
                       "No Daily Quiz Available Today",
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 18,
-                      ),
+                      style: TextStyle(color: Colors.white70, fontSize: 18),
                     ),
                   )
                 : _buildQuizContent(context, quizId),
@@ -194,9 +205,13 @@ class _DailyQuizDetailScreenState extends State<DailyQuizDetailScreen> {
   }
 
   Widget _buildQuizContent(BuildContext context, String quizId) {
-    final expiresAt = quizData!['expiresAt'] as Timestamp;
-    final isExpired =
-        expiresAt.toDate().isBefore(DateTime.now().toUtc());
+    // FIX: Null-safe Timestamp access. Force-cast `as Timestamp`
+    // crashed when the expiresAt field was missing from Firestore.
+    final expiresAtRaw = quizData?['expiresAt'];
+    final Timestamp expiresAt = expiresAtRaw is Timestamp
+        ? expiresAtRaw
+        : Timestamp.fromDate(DateTime.now().subtract(const Duration(days: 1)));
+    final isExpired = expiresAt.toDate().isBefore(DateTime.now().toUtc());
 
     final bool isPracticeMode = isExpired;
     final bool disableStart = !isPracticeMode && alreadyPlayed;
@@ -222,9 +237,7 @@ class _DailyQuizDetailScreenState extends State<DailyQuizDetailScreen> {
         _infoTile("⏳ Time Left", _timeLeft(expiresAt)),
         _infoTile(
           "🔥 XP Reward",
-          isPracticeMode
-              ? "Practice Only"
-              : "+${quizData!['xpReward']} XP",
+          isPracticeMode ? "Practice Only" : "+${quizData!['xpReward']} XP",
         ),
         _infoTile("🌍 Players Today", playersToday.toString()),
 
@@ -234,8 +247,8 @@ class _DailyQuizDetailScreenState extends State<DailyQuizDetailScreen> {
           text: isPracticeMode
               ? "Practice Mode (30 Min)"
               : alreadyPlayed
-                  ? "Already Played"
-                  : "Start Daily Quiz",
+              ? "Already Played"
+              : "Start Daily Quiz",
           onTap: disableStart
               ? null
               : () async {
@@ -243,13 +256,12 @@ class _DailyQuizDetailScreenState extends State<DailyQuizDetailScreen> {
                     context,
                     MaterialPageRoute(
                       builder: (_) => QuizAttemptScreen(
-                        quizId:     quizId,
-                        endAt:      isPracticeMode
-                            ? DateTime.now()
-                                .add(const Duration(minutes: 30))
+                        quizId: quizId,
+                        endAt: isPracticeMode
+                            ? DateTime.now().add(const Duration(minutes: 30))
                             : expiresAt.toDate(),
-                        isDaily:    !isPracticeMode,
-                        topicId:    quizId,
+                        isDaily: !isPracticeMode,
+                        topicId: quizId,
                         topicTitle: quizData?['title'] ?? 'Daily Quiz',
                       ),
                     ),

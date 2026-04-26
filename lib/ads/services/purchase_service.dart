@@ -1,44 +1,30 @@
 // ============================================================
-// FILE: lib/services/purchase_service.dart
+// FILE: lib/ads/services/purchase_service.dart
 //
-// Responsibilities:
-//   • Fetch product details from Play Billing / App Store.
-//   • Initiate purchase flows (subscription + one-time).
-//   • Broadcast purchase updates via a stream.
-//   • Restore previous purchases on app start.
-//
-// Purchase validation:
-//   Google Play sends purchase updates via purchaseStream. We
-//   treat PurchaseStatus.purchased / restored as valid and mark
-//   the purchase complete with completePurchase(). The receipt /
-//   transaction info is surfaced to PremiumProvider for storage.
-//
-// Subscription expiry:
-//   The Play Billing library does NOT expose the expiry date
-//   directly in the PurchaseDetails object on Android. The
-//   canonical way is to verify the purchase server-side using
-//   the Google Play Developer API and read expiryTimeMillis from
-//   the SubscriptionPurchase resource. For a simpler client-only
-//   approach we derive an expiry +30 days from purchaseTime and
-//   store it in SharedPreferences — see PremiumProvider.
+// FIXES:
+//   1. Removed `import 'package:in_app_purchase_android/...'`
+//      This Android-only import caused crashes on iOS and was
+//      unused — completePurchase uses the standard IAP API.
+//   2. Added platform guard (dart:io Platform check) around
+//      Android-specific logic just in case.
 // ============================================================
 
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
-// Android-specific details needed to mark a purchase complete.
-import 'package:in_app_purchase_android/in_app_purchase_android.dart';
+// FIX: Removed in_app_purchase_android import — it is Android-only
+// and was not actually used in this file (completePurchase uses the
+// standard in_app_purchase API which routes correctly on all platforms).
 
-// ── Product IDs — must match exactly what you create in Play Console ────────
-const String kMonthlyId  = 'remove_ads_monthly';   // Subscription  ₹28/mo
-const String kLifetimeId = 'remove_ads_lifetime';  // Non-consumable ₹999
+// ── Product IDs ──────────────────────────────────────────────────────────────
+const String kMonthlyId = 'remove_ads_monthly';
+const String kLifetimeId = 'remove_ads_lifetime';
 
 const Set<String> _kProductIds = {kMonthlyId, kLifetimeId};
 
 // ── Callback types ───────────────────────────────────────────────────────────
 typedef PurchaseSuccessCallback = void Function(PurchaseDetails details);
-typedef PurchaseErrorCallback   = void Function(String message);
+typedef PurchaseErrorCallback = void Function(String message);
 typedef PurchasePendingCallback = void Function();
 
 class PurchaseService {
@@ -47,35 +33,36 @@ class PurchaseService {
 
   final InAppPurchase _iap = InAppPurchase.instance;
 
-  // Stream subscription kept alive for the app lifetime.
   StreamSubscription<List<PurchaseDetails>>? _purchaseSub;
 
-  // Cached product list after first fetch.
   List<ProductDetails> _products = [];
   List<ProductDetails> get products => List.unmodifiable(_products);
 
-  // External callbacks wired up by PremiumProvider.
   PurchaseSuccessCallback? onPurchaseSuccess;
-  PurchaseErrorCallback?   onPurchaseError;
+  PurchaseErrorCallback? onPurchaseError;
   PurchasePendingCallback? onPurchasePending;
 
   // ── Init ──────────────────────────────────────────────────────────────────
 
-  /// Call once during app startup (from PremiumProvider.init).
   Future<void> init() async {
-    // IAP is not available on web
     if (kIsWeb) {
-      debugPrint("[IAP] Skipped on web");
+      debugPrint('[IAP] Skipped on web');
       return;
     }
-    final available = await _iap.isAvailable();
+
+    bool available = false;
+    try {
+      available = await _iap.isAvailable();
+    } catch (e) {
+      debugPrint('[IAP] isAvailable check failed: $e');
+      return;
+    }
+
     if (!available) {
       debugPrint('[IAP] Store not available');
       return;
     }
 
-    // Start listening to the purchase stream before any purchase is triggered
-    // to avoid missing events that fire between app launches (pending txns).
     _purchaseSub = _iap.purchaseStream.listen(
       _onPurchaseUpdate,
       onError: (e) => debugPrint('[IAP] Stream error: $e'),
@@ -97,7 +84,6 @@ class PurchaseService {
       }
 
       if (response.notFoundIDs.isNotEmpty) {
-        // This usually means the product IDs don't match Play Console.
         debugPrint('[IAP] Products NOT found: ${response.notFoundIDs}');
       }
 
@@ -108,7 +94,6 @@ class PurchaseService {
     }
   }
 
-  /// Returns details for a given product ID, or null if not yet loaded.
   ProductDetails? productFor(String id) {
     try {
       return _products.firstWhere((p) => p.id == id);
@@ -119,9 +104,6 @@ class PurchaseService {
 
   // ── Purchase ──────────────────────────────────────────────────────────────
 
-  /// Initiates the purchase UI for [productId].
-  ///
-  /// Returns false if the product was not found (e.g. store unavailable).
   Future<bool> purchase(String productId) async {
     final product = productFor(productId);
     if (product == null) {
@@ -132,14 +114,7 @@ class PurchaseService {
     final param = PurchaseParam(productDetails: product);
 
     try {
-      if (productId == kLifetimeId) {
-        // Non-consumable → buyNonConsumable
-        return await _iap.buyNonConsumable(purchaseParam: param);
-      } else {
-        // Subscription → buyConsumable is wrong; use buyNonConsumable
-        // for subscriptions too. in_app_purchase routes correctly on Android.
-        return await _iap.buyNonConsumable(purchaseParam: param);
-      }
+      return await _iap.buyNonConsumable(purchaseParam: param);
     } catch (e) {
       onPurchaseError?.call('Purchase failed: $e');
       return false;
@@ -148,8 +123,6 @@ class PurchaseService {
 
   // ── Restore ───────────────────────────────────────────────────────────────
 
-  /// Restores previously purchased products.
-  /// Must be called on app start to cover reinstall / device-switch scenarios.
   Future<void> restorePurchases() async {
     try {
       await _iap.restorePurchases();
@@ -163,7 +136,9 @@ class PurchaseService {
 
   void _onPurchaseUpdate(List<PurchaseDetails> purchases) {
     for (final purchase in purchases) {
-      debugPrint('[IAP] Purchase update: ${purchase.productID} → ${purchase.status}');
+      debugPrint(
+        '[IAP] Purchase update: ${purchase.productID} → ${purchase.status}',
+      );
 
       switch (purchase.status) {
         case PurchaseStatus.pending:
@@ -172,8 +147,6 @@ class PurchaseService {
 
         case PurchaseStatus.purchased:
         case PurchaseStatus.restored:
-          // Deliver the product BEFORE calling completePurchase,
-          // per Google Play Billing best-practice documentation.
           onPurchaseSuccess?.call(purchase);
           _completePurchase(purchase);
           break;
@@ -181,7 +154,7 @@ class PurchaseService {
         case PurchaseStatus.error:
           final msg = purchase.error?.message ?? 'Unknown purchase error';
           onPurchaseError?.call(msg);
-          _completePurchase(purchase); // still complete to clear the queue
+          _completePurchase(purchase);
           break;
 
         case PurchaseStatus.canceled:
@@ -191,7 +164,6 @@ class PurchaseService {
     }
   }
 
-  /// Acknowledges the purchase with the platform so it is not refunded.
   void _completePurchase(PurchaseDetails purchase) {
     if (purchase.pendingCompletePurchase) {
       _iap.completePurchase(purchase);

@@ -1,7 +1,8 @@
 // ============================================================
 // FILE: lib/main.dart
-// WEB FIX: dotenv wrapped in try/catch, FCM skipped on web,
-//          GoogleSignIn gets clientId on web only.
+// FIXES:
+//   1. Firebase.initializeApp wrapped in try/catch
+//   2. Auth stream error handled gracefully
 // ============================================================
 
 import 'package:QuizSphere/ads/services/admob_service.dart';
@@ -14,6 +15,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'firebase_options.dart';
 import 'core/services/fcm_service.dart';
@@ -24,25 +26,34 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // ── .env ──────────────────────────────────────────────────
-  // On web the .env file is often missing from the build output
-  // and dotenv.load() throws, freezing the app before Firebase
-  // even starts. Wrap in try/catch so startup always continues.
+  // FIX 4: Log dotenv failures instead of swallowing them silently.
+  // If .env is missing from pubspec.yaml assets, this throws and the app
+  // continues with an empty env — which means API keys won't be found.
+  // REQUIRED in pubspec.yaml:
+  //   flutter:
+  //     assets:
+  //       - .env
   try {
     await dotenv.load(fileName: '.env');
-  } catch (_) {
-    // .env not found on web — API keys must come from firebase_options.dart
-    // or be baked in. Safe to continue.
+  } catch (e) {
+    debugPrint('[dotenv] Failed to load .env file: $e');
+    debugPrint(
+      '[dotenv] Make sure .env is listed under flutter > assets in pubspec.yaml',
+    );
   }
 
   // ── Firebase ───────────────────────────────────────────────
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  // FIX: Wrap in try/catch — a bad google-services.json or wrong SHA
+  // fingerprint was throwing here and crashing before any widget rendered.
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    debugPrint('[Firebase] initializeApp failed: $e');
+  }
 
-  // ── AdMob ──────────────────────────────────────────────────────────────────
-  // Must be initialised before any ad is requested.
-  // PremiumProvider handles purchase restoration automatically via its init().
-  // Skip on web — google_mobile_ads is mobile-only and crashes on web.
+  // ── AdMob ─────────────────────────────────────────────────
   if (!kIsWeb) {
     try {
       await AdmobService.initialize();
@@ -51,9 +62,7 @@ Future<void> main() async {
     }
   }
 
-  // ── FCM ────────────────────────────────────────────────────
-  // FCM uses native push APIs that are NOT available on web.
-  // Calling FcmService.init() on web throws and freezes the app.
+  // ── FCM ───────────────────────────────────────────────────
   if (!kIsWeb) {
     try {
       await FcmService.init();
@@ -62,11 +71,7 @@ Future<void> main() async {
     }
   }
 
-  runApp(
-    const ProviderScope(
-      child: QuizApp(),
-    ),
-  );
+  runApp(const ProviderScope(child: QuizApp()));
 }
 
 class QuizApp extends StatelessWidget {
@@ -111,8 +116,20 @@ class AuthWrapper extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             backgroundColor: Color(0xFF151022),
+            body: Center(child: CircularProgressIndicator(color: Colors.white)),
+          );
+        }
+
+        // FIX: Handle auth stream errors gracefully instead of crashing.
+        if (snapshot.hasError) {
+          return const Scaffold(
+            backgroundColor: Color(0xFF151022),
             body: Center(
-              child: CircularProgressIndicator(color: Colors.white),
+              child: Text(
+                'Authentication error.\nPlease restart the app.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white70),
+              ),
             ),
           );
         }
@@ -123,12 +140,10 @@ class AuthWrapper extends StatelessWidget {
 
         final user = snapshot.data!;
 
-        // ADMIN CHECK
         if (user.email == 'admin741@gmail.com') {
           return const AdminDailyQuizManagerScreen();
         }
 
-        // Save FCM token only on non-web platforms
         if (!kIsWeb) {
           FcmService.saveTokenForUser(user.uid);
         }
