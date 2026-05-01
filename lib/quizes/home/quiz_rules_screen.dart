@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 class QuizRulesScreen extends StatefulWidget {
   final DateTime startAt;
   final VoidCallback onConfirmedStart;
+  final String quizType; // 'mcq' | 'coding' | 'mixed'
 
   const QuizRulesScreen({
     super.key,
     required this.startAt,
     required this.onConfirmedStart,
+    this.quizType = 'mcq',
   });
 
   @override
@@ -93,13 +95,16 @@ class _QuizRulesScreenState extends State<QuizRulesScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text("Test Instructions", style: TextStyle(color: Colors.white),),
+        title: const Text(
+          "Test Instructions",
+          style: TextStyle(color: Colors.white),
+        ),
         backgroundColor: Colors.transparent,
         leading: IconButton(
           onPressed: () {
             Navigator.pop(context);
           },
-          icon: Icon(Icons.arrow_back, color: Colors.white,),
+          icon: Icon(Icons.arrow_back, color: Colors.white),
         ),
         elevation: 0,
         flexibleSpace: _gradientBg(),
@@ -116,8 +121,8 @@ class _QuizRulesScreenState extends State<QuizRulesScreen> {
                 _glassCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text(
+                    children: [
+                      const Text(
                         "Important Instructions",
                         style: TextStyle(
                           color: Colors.white,
@@ -125,11 +130,24 @@ class _QuizRulesScreenState extends State<QuizRulesScreen> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      SizedBox(height: 14),
-                      _Rule("This is a time-bound test"),
-                      _Rule("You cannot navigate back"),
-                      _Rule("Do not leave or minimize the app"),
-                      _Rule("Test auto-submits when time ends"),
+                      const SizedBox(height: 14),
+                      const _Rule("This is a time-bound test"),
+                      const _Rule("You cannot navigate back"),
+                      const _Rule("Do not leave or minimize the app"),
+                      const _Rule("Test auto-submits when time ends"),
+                      if (widget.quizType == 'coding' ||
+                          widget.quizType == 'mixed') ...[
+                        const SizedBox(height: 8),
+                        const Divider(color: Colors.white24),
+                        const SizedBox(height: 4),
+                        const _Rule("Coding: write & run your code"),
+                        const _Rule("All languages: C, C++, Java, Python, JS"),
+                        const _Rule("Output graded automatically"),
+                      ],
+                      if (widget.quizType == 'mixed') ...[
+                        const SizedBox(height: 4),
+                        const _Rule("Complete MCQ section first, then Coding"),
+                      ],
                     ],
                   ),
                 ),
@@ -143,9 +161,7 @@ class _QuizRulesScreenState extends State<QuizRulesScreen> {
                       Text(
                         canStart ? "TEST IS LIVE" : "TEST STARTS IN",
                         style: TextStyle(
-                          color: canStart
-                              ? Colors.greenAccent
-                              : Colors.white70,
+                          color: canStart ? Colors.greenAccent : Colors.white70,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -173,8 +189,9 @@ class _QuizRulesScreenState extends State<QuizRulesScreen> {
                   child: ElevatedButton(
                     onPressed: canStart ? _confirmAndStart : null,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          canStart ? Colors.greenAccent : Colors.grey,
+                      backgroundColor: canStart
+                          ? Colors.greenAccent
+                          : Colors.grey,
                       foregroundColor: Colors.black,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
@@ -203,11 +220,7 @@ class _QuizRulesScreenState extends State<QuizRulesScreen> {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            Color(0xFF0F2027),
-            Color(0xFF203A43),
-            Color(0xFF2C5364),
-          ],
+          colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
         ),
       ),
     );
@@ -241,10 +254,7 @@ class _Rule extends StatelessWidget {
           const Icon(Icons.circle, size: 6, color: Colors.white70),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(color: Colors.white70),
-            ),
+            child: Text(text, style: const TextStyle(color: Colors.white70)),
           ),
         ],
       ),

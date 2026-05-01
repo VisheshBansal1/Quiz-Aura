@@ -2,6 +2,13 @@
 // Rewarded ad shown BEFORE generating AI questions for free users.
 // Premium users (isPremium == true) skip the ad and generate immediately.
 // If the ad fails to load → fail-open: generate anyway.
+//
+// BUG FIXED:
+//   Previously, `loading` was only set to true INSIDE _doGenerate(),
+//   which runs AFTER the rewarded ad finishes (~5 seconds).
+//   During those 5 seconds the button appeared frozen / app was idle.
+//   FIX: Set loading=true IMMEDIATELY when the button is tapped, BEFORE
+//   starting the ad load. This shows the overlay instantly.
 // ────────────────────────────────────────────────────────────────────────────
 
 import 'package:QuizSphere/ads/provider/premium_provider.dart';
@@ -11,7 +18,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/groq_ai_service.dart';
-import '../services/admin_quiz_service.dart';
+import '../services/Admin_quiz_service.dart';
 
 class AiGenerateQuestionsScreen extends ConsumerStatefulWidget {
   final String quizId;
@@ -30,6 +37,9 @@ class _AiGenerateQuestionsScreenState
   bool loading = false;
   bool saving = false;
 
+  // FIX: separate state for "ad is loading" so we can show the right message
+  bool _adLoading = false;
+
   String difficulty = "Medium";
   String? topicTitle;
   int questionCount = 5;
@@ -37,7 +47,6 @@ class _AiGenerateQuestionsScreenState
 
   List<Map<String, dynamic>> questions = [];
 
-  // ── Input decoration shared across all fields ──────────────────────────
   static const _inputDecoration = InputDecoration(
     labelStyle: TextStyle(color: Colors.white70),
     enabledBorder: UnderlineInputBorder(
@@ -48,14 +57,11 @@ class _AiGenerateQuestionsScreenState
     ),
   );
 
-  String? _initError; // FIX: capture constructor errors (e.g. missing .env key)
+  String? _initError;
 
   @override
   void initState() {
     super.initState();
-    // FIX: GroqAIService constructor used to throw when the API key was absent
-    // (common on Flutter web where dotenv loading may fail). Catch it here so
-    // the screen still renders and shows the user an actionable error message.
     try {
       groqAIService = GroqAIService();
     } catch (e) {
@@ -65,7 +71,6 @@ class _AiGenerateQuestionsScreenState
     _loadQuizTopic();
   }
 
-  // ================= LOAD QUIZ TOPIC =================
   Future<void> _loadQuizTopic() async {
     final snap = await FirebaseFirestore.instance
         .collection('quizzes')
@@ -78,53 +83,76 @@ class _AiGenerateQuestionsScreenState
     }
   }
 
-  // ================= GENERATE QUESTIONS =================
-  //
-  // Ad control logic:
-  //   • Free users  → show rewarded ad, then generate on reward earned.
-  //   • Premium     → skip ad, generate immediately.
-  //   • Ad failure  → fail-open: generate anyway (UX never blocked).
-  //
+  // ─────────────────────────────────────────────────────────────────────────
+  // GENERATE — entry point when user taps the button
+  // ─────────────────────────────────────────────────────────────────────────
   Future<void> generate() async {
-    // FIX: guard against uninitialised service (missing API key / .env error)
     if (_initError != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(_initError!), backgroundColor: Colors.redAccent),
       );
       return;
     }
-    if (loading || topicTitle == null) return;
 
-    if (questionCount > maxQuestionsAllowed) {
+    // Guard: already running
+    if (loading || _adLoading || topicTitle == null) return;
+
+    if (questionCount < 1 || questionCount > maxQuestionsAllowed) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('You can generate maximum 15 questions at a time.'),
+        SnackBar(
+          content: Text('Questions must be between 1 and $maxQuestionsAllowed.'),
         ),
       );
       return;
     }
 
-    // Rewarded ad gate for free users.
     final isPremium = ref.read(isPremiumProvider);
-    if (!isPremium) {
-      // Show rewarded ad before allowing generation.
-      AdmobService.loadAndShowRewardedAd(
-        onRewarded: () => _doGenerate(), // continue only after reward
-        onFailed: () => _doGenerate(), // fail-open: still generate
-        onAdDismissed: () {}, // loading state handled inside _doGenerate
-      );
-      return; // wait for ad callback
+
+    if (isPremium) {
+      // Premium: go straight to generation
+      await _doGenerate();
+      return;
     }
 
-    // Premium user → go straight to generation.
-    _doGenerate();
+    // ── Free user: show rewarded ad first ──────────────────────────────────
+    // FIX: Set _adLoading = true IMMEDIATELY so the overlay appears RIGHT
+    // when the button is tapped. Previously loading was only set inside
+    // _doGenerate() which runs 5+ seconds later — causing the app to look
+    // frozen while the ad was silently loading in the background.
+    setState(() => _adLoading = true);
+
+    AdmobService.loadAndShowRewardedAd(
+      onRewarded: () {
+        // User watched the ad — proceed to generate
+        if (mounted) setState(() => _adLoading = false);
+        _doGenerate();
+      },
+      onAdDismissed: () {
+        // Ad closed without reward — still generate (fail-open UX)
+        // Note: onRewarded fires BEFORE onAdDismissed, so _adLoading
+        // may already be false here. This handles the "skipped" case.
+        if (mounted && _adLoading) {
+          setState(() => _adLoading = false);
+          _doGenerate();
+        }
+      },
+      onFailed: () {
+        // Ad failed to load — fail-open: generate anyway
+        debugPrint('[AdMob] Rewarded ad failed — generating without ad');
+        if (mounted) setState(() => _adLoading = false);
+        _doGenerate();
+      },
+    );
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // DO GENERATE — actual API call
+  // ─────────────────────────────────────────────────────────────────────────
   Future<void> _doGenerate() async {
-    if (loading || topicTitle == null) return;
-    // FIX 3: Set loading=true BEFORE the async call so the overlay appears
-    // and duplicate taps are blocked.
+    if (!mounted || topicTitle == null) return;
+
     setState(() => loading = true);
+
     try {
       final result = await groqAIService.generateMCQs(
         topic: topicTitle!,
@@ -144,7 +172,6 @@ class _AiGenerateQuestionsScreenState
         loading = false;
       });
     } catch (e) {
-      // FIX: surface AI/network errors to the user instead of silently failing
       if (!mounted) return;
       setState(() => loading = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -157,7 +184,9 @@ class _AiGenerateQuestionsScreenState
     }
   }
 
-  // ================= REGENERATE SINGLE =================
+  // ─────────────────────────────────────────────────────────────────────────
+  // REGENERATE SINGLE
+  // ─────────────────────────────────────────────────────────────────────────
   Future<void> regenerateOne(int index) async {
     if (_initError != null || topicTitle == null) return;
 
@@ -188,7 +217,9 @@ class _AiGenerateQuestionsScreenState
     }
   }
 
-  // ================= SAVE ALL =================
+  // ─────────────────────────────────────────────────────────────────────────
+  // SAVE ALL
+  // ─────────────────────────────────────────────────────────────────────────
   Future<void> saveAll() async {
     if (saving) return;
     setState(() => saving = true);
@@ -255,13 +286,19 @@ class _AiGenerateQuestionsScreenState
     }
   }
 
-  // ================= UI =================
+  // ─────────────────────────────────────────────────────────────────────────
+  // UI
+  // ─────────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    // Determine the overlay message based on which stage we're in
+    final String overlayMessage = _adLoading
+        ? 'Loading ad…\nPlease wait a moment'
+        : saving
+            ? 'Saving questions…'
+            : 'Generating questions…';
+
     return Scaffold(
-      // ✅ FIX 1: Set the scaffold color directly — no outer Container wrapper.
-      // Wrapping Scaffold in a Container + backgroundColor: transparent is
-      // unreliable on Android; the theme's white scaffold background bleeds through.
       backgroundColor: const Color(0xFF0F2027),
       appBar: AppBar(
         title: const Text(
@@ -278,9 +315,6 @@ class _AiGenerateQuestionsScreenState
       ),
       body: Stack(
         children: [
-          // ✅ FIX 2: Use Positioned.fill so the gradient Container is explicitly
-          // constrained to fill the Stack. An unsized Container inside a Stack
-          // collapses to 0×0 — that's why the background was invisible before.
           Positioned.fill(child: _gradientBg()),
 
           Padding(
@@ -333,21 +367,40 @@ class _AiGenerateQuestionsScreenState
             ),
           ),
 
-          // ── Loading / saving overlay ──────────────────────────────────
-          if (loading || saving)
+          // ── Loading / ad-loading / saving overlay ─────────────────────
+          // FIX: overlay now shows for ALL three states:
+          //   _adLoading → "Loading ad… Please wait"
+          //   loading    → "Generating questions…"
+          //   saving     → "Saving…"
+          if (loading || saving || _adLoading)
             Positioned.fill(
               child: Container(
-                color: Colors.black54,
+                color: Colors.black.withOpacity(0.7),
                 child: Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const CircularProgressIndicator(color: Colors.tealAccent),
-                      const SizedBox(height: 16),
-                      Text(
-                        loading ? 'Generating questions…' : 'Saving…',
-                        style: const TextStyle(color: Colors.white70),
+                      const CircularProgressIndicator(
+                        color: Colors.tealAccent,
+                        strokeWidth: 2.5,
                       ),
+                      const SizedBox(height: 20),
+                      Text(
+                        overlayMessage,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          height: 1.5,
+                        ),
+                      ),
+                      if (_adLoading) ...[
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Watch a short ad to generate for free',
+                          style: TextStyle(color: Colors.white54, fontSize: 12),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -358,7 +411,9 @@ class _AiGenerateQuestionsScreenState
     );
   }
 
-  // ================= CONTROLS =================
+  // ─────────────────────────────────────────────────────────────────────────
+  // CONTROLS SECTION
+  // ─────────────────────────────────────────────────────────────────────────
   Widget _controls() {
     return _card(
       child: Column(
@@ -423,11 +478,16 @@ class _AiGenerateQuestionsScreenState
                   borderRadius: BorderRadius.circular(14),
                 ),
               ),
-              onPressed: generate,
+              // Disable button while any loading is happening
+              onPressed: (loading || saving || _adLoading) ? null : generate,
               icon: const Icon(Icons.auto_awesome),
-              label: const Text(
-                "Generate",
-                style: TextStyle(fontWeight: FontWeight.bold),
+              label: Text(
+                _adLoading
+                    ? "Loading Ad…"
+                    : loading
+                        ? "Generating…"
+                        : "Generate",
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
           ),
@@ -436,7 +496,9 @@ class _AiGenerateQuestionsScreenState
     );
   }
 
-  // ================= EDITABLE QUESTION =================
+  // ─────────────────────────────────────────────────────────────────────────
+  // EDITABLE QUESTION CARD
+  // ─────────────────────────────────────────────────────────────────────────
   Widget _editableQuestion(int index) {
     final q = questions[index];
 
@@ -514,25 +576,27 @@ class _AiGenerateQuestionsScreenState
     );
   }
 
-  // ================= UI HELPERS =================
+  // ─────────────────────────────────────────────────────────────────────────
+  // UI HELPERS
+  // ─────────────────────────────────────────────────────────────────────────
   Widget _gradientBg() => Container(
-    decoration: const BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
-      ),
-    ),
-  );
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
+          ),
+        ),
+      );
 
   Widget _card({required Widget child}) => Container(
-    margin: const EdgeInsets.only(bottom: 12),
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(18),
-      color: Colors.white.withOpacity(0.10),
-      border: Border.all(color: Colors.white.withOpacity(0.20)),
-    ),
-    child: child,
-  );
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          color: Colors.white.withOpacity(0.10),
+          border: Border.all(color: Colors.white.withOpacity(0.20)),
+        ),
+        child: child,
+      );
 }

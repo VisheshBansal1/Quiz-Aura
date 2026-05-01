@@ -19,6 +19,7 @@
 
 import 'package:QuizSphere/ads/provider/premium_provider.dart';
 import 'package:QuizSphere/ads/services/admob_service.dart';
+import 'package:QuizSphere/ads/screen/premium_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -120,7 +121,20 @@ class _AnswerReviewScreenState extends ConsumerState<AnswerReviewScreen> {
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
-                    child: CircularProgressIndicator(color: Colors.white),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(
+                          color: Colors.tealAccent,
+                          strokeWidth: 2.5,
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'Loading answers…',
+                          style: TextStyle(color: Colors.white60, fontSize: 13),
+                        ),
+                      ],
+                    ),
                   );
                 }
                 if (snapshot.hasError) {
@@ -261,7 +275,23 @@ class _AdGateOverlay extends StatelessWidget {
               'Go Premium to skip ads forever.',
               style: TextStyle(color: Colors.white54, fontSize: 13),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PremiumScreen()),
+              ),
+              icon: const Icon(
+                Icons.workspace_premium,
+                color: Colors.amberAccent,
+                size: 16,
+              ),
+              label: const Text(
+                'Upgrade to Premium',
+                style: TextStyle(color: Colors.amberAccent),
+              ),
+            ),
+            const SizedBox(height: 16),
             if (isLoading)
               const CircularProgressIndicator(color: Colors.tealAccent)
             else

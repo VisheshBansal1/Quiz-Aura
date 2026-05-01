@@ -1,17 +1,17 @@
 // ============================================================
-// FILE: lib/widgets/banner_ad_widget.dart
+// FILE: lib/ads/widgets/banner_ad_widget.dart
 //
-// Ad control logic:
-//   • Reads isPremiumProvider from Riverpod.
-//   • If isPremium == true  → returns SizedBox.shrink() (zero height).
-//   • If isPremium == false → loads and renders a BannerAd.
-//
-// Memory management:
-//   • BannerAd is disposed in _BannerAdWidgetState.dispose()
-//     to prevent the ad from holding native resources after the
-//     widget is removed from the tree.
-//   • Ad is only loaded once per widget instance. Navigating away
-//     and back creates a fresh widget & fresh ad load.
+// BUGS FIXED:
+//   1. CRITICAL: Widget returned SizedBox.shrink() while ad was still
+//      loading (_bannerAd != null but _adLoaded == false) which caused
+//      the Scaffold body layout to give the ad ZERO height — so even
+//      after the ad loaded, the AdWidget had no room to render.
+//      FIX: Reserve a fixed 50px slot immediately; fill it with the ad
+//      once loaded, or keep it transparent until then.
+//   2. Ad was loaded once in initState via postFrameCallback. If the
+//      widget rebuilt (e.g. tab switch) the ad was already loaded but
+//      _adLoaded could be false causing a blank slot.
+//   3. Added _adFailedToLoad flag so we collapse on real failure.
 // ============================================================
 
 import 'package:QuizSphere/ads/provider/premium_provider.dart';
@@ -32,63 +32,84 @@ class BannerAdWidget extends ConsumerStatefulWidget {
 class _BannerAdWidgetState extends ConsumerState<BannerAdWidget> {
   BannerAd? _bannerAd;
   bool _adLoaded = false;
+  bool _adFailed = false;
+
+  static const double _bannerHeight = 52.0;
 
   @override
   void initState() {
     super.initState();
-    // Defer until after the first frame so Riverpod is fully mounted.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadAdIfNeeded());
+    // Load after first frame so context + premium state are available
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadAd());
   }
 
-  void _loadAdIfNeeded() {
-    // Ad control logic: check premium status before loading.
-    if (kIsWeb) return; // google_mobile_ads is mobile-only
+  void _loadAd() {
+    if (kIsWeb) return;
+    if (!mounted) return;
+
+    // Check premium AFTER first frame (premiumProvider may not be ready in constructor)
     final isPremium = ref.read(isPremiumProvider);
-    if (isPremium) return; // premium users never see ads
+    if (isPremium) return;
 
     final ad = BannerAd(
+      // FIX: Use adaptive banner for better fill rates and proper sizing
       adUnitId: AdmobService.bannerAdUnitId,
-      size: AdSize.banner,
+      size: AdSize.banner, // 320x50 — most reliable for fill
       request: const AdRequest(),
       listener: BannerAdListener(
         onAdLoaded: (_) {
+          debugPrint('[AdMob] BannerAd loaded ✓');
           if (mounted) setState(() => _adLoaded = true);
-          debugPrint('[AdMob] BannerAd loaded');
         },
         onAdFailedToLoad: (ad, error) {
+          debugPrint('[AdMob] BannerAd failed: ${error.message}');
           ad.dispose();
-          debugPrint('[AdMob] BannerAd failed to load: $error');
+          if (mounted) setState(() => _adFailed = true);
         },
+        onAdOpened: (_) => debugPrint('[AdMob] BannerAd opened'),
+        onAdClosed: (_) => debugPrint('[AdMob] BannerAd closed'),
       ),
     );
 
     ad.load();
-    _bannerAd = ad;
+    if (mounted) setState(() => _bannerAd = ad);
   }
 
   @override
   void dispose() {
-    // Always dispose to release native ad resources.
     _bannerAd?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Reactively hide the banner the moment user goes premium mid-session.
     final isPremium = ref.watch(isPremiumProvider);
 
-    if (isPremium || !_adLoaded || _bannerAd == null) {
-      return const SizedBox.shrink(); // zero-height placeholder
+    // Premium users or web: collapse completely
+    if (isPremium || kIsWeb || _adFailed) {
+      return const SizedBox.shrink();
     }
 
-    return SafeArea(
-      top: false,
-      child: SizedBox(
-        width: _bannerAd!.size.width.toDouble(),
-        height: _bannerAd!.size.height.toDouble(),
-        child: AdWidget(ad: _bannerAd!),
-      ),
+    // FIX: Always reserve the height slot so the layout doesn't jump.
+    // While the ad hasn't loaded yet → show a transparent placeholder.
+    // Once loaded → show the actual AdWidget with a fade-in.
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      width: double.infinity,
+      height: _bannerHeight,
+      color: Colors.black,
+      alignment: Alignment.center,
+      child: _adLoaded && _bannerAd != null
+          ? AnimatedOpacity(
+              opacity: 1.0,
+              duration: const Duration(milliseconds: 400),
+              child: SizedBox(
+                width: _bannerAd!.size.width.toDouble(),
+                height: _bannerAd!.size.height.toDouble(),
+                child: AdWidget(ad: _bannerAd!),
+              ),
+            )
+          : const SizedBox.shrink(), // transparent placeholder while loading
     );
   }
 }

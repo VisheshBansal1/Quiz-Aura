@@ -4,23 +4,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 class AdminQuizService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-
   static const String _chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-  // --------------------------------------------------
-  // 🔐 Generate unique 6-char join code
-  // --------------------------------------------------
   String _generateJoinCode() {
     final rand = Random.secure();
-    return List.generate(
-      6,
-      (_) => _chars[rand.nextInt(_chars.length)],
-    ).join();
+    return List.generate(6, (_) => _chars[rand.nextInt(_chars.length)]).join();
   }
 
-  // --------------------------------------------------
-  // 🧠 CREATE QUIZ
-  // --------------------------------------------------
+  // ── CREATE QUIZ ──────────────────────────────────────────────────────────
   Future<Map<String, String?>> createQuiz({
     required String title,
     required String topicId,
@@ -29,9 +20,11 @@ class AdminQuizService {
     required DateTime startAt,
     required DateTime endAt,
     required int durationMinutes,
+    String quizType = 'mcq', // 'mcq' | 'coding' | 'mixed'
+    int passPercentage = 60,
   }) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) throw Exception("User not logged in");
+    if (uid == null) throw Exception('User not logged in');
 
     final String? joinCode = isPrivate ? _generateJoinCode() : null;
 
@@ -47,71 +40,67 @@ class AdminQuizService {
       'startAt': startAt,
       'endAt': endAt,
       'durationMinutes': durationMinutes,
+      'quizType': quizType, // NEW
+      'passPercentage': passPercentage, // NEW
+      'totalQuestions': 0,
     });
 
-    return {
-      'quizId': doc.id,
-      'joinCode': joinCode,
-    };
+    return {'quizId': doc.id, 'joinCode': joinCode};
   }
 
-  // --------------------------------------------------
-  // ❓ ADD MCQ QUESTION (GENERIC)
-  // --------------------------------------------------
+  // ── ADD MCQ QUESTION ─────────────────────────────────────────────────────
   Future<void> addMcqQuestion({
     required String quizId,
     required Map<String, dynamic> data,
   }) async {
-    if (quizId.isEmpty) throw Exception("Invalid quiz ID");
+    if (quizId.isEmpty) throw Exception('Invalid quiz ID');
+    if (data['type'] != 'mcq')
+      throw Exception('MCQ question must have type = mcq');
 
-    if (data['type'] != 'mcq') {
-      throw Exception("MCQ question must have type = mcq");
-    }
-
-    await _db
-        .collection('quizzes')
-        .doc(quizId)
-        .collection('questions')
-        .add({
+    await _db.collection('quizzes').doc(quizId).collection('questions').add({
       ...data,
       'isActive': true,
       'createdAt': FieldValue.serverTimestamp(),
     });
+
+    await _updateQuestionCount(quizId);
   }
 
-  // --------------------------------------------------
-  // 💻 ADD CODING QUESTION (GENERIC)
-  // --------------------------------------------------
+  // ── ADD CODING QUESTION ──────────────────────────────────────────────────
   Future<void> addCodingQuestion({
     required String quizId,
     required Map<String, dynamic> data,
   }) async {
-    if (quizId.isEmpty) throw Exception("Invalid quiz ID");
+    if (quizId.isEmpty) throw Exception('Invalid quiz ID');
+    if (data['type'] != 'coding')
+      throw Exception('Coding question must have type = coding');
 
-    if (data['type'] != 'coding') {
-      throw Exception("Coding question must have type = coding");
-    }
-
-    await _db
-        .collection('quizzes')
-        .doc(quizId)
-        .collection('questions')
-        .add({
+    await _db.collection('quizzes').doc(quizId).collection('questions').add({
       ...data,
       'isActive': true,
       'createdAt': FieldValue.serverTimestamp(),
     });
+
+    await _updateQuestionCount(quizId);
   }
 
-  // --------------------------------------------------
-  // 🔎 JOIN PRIVATE QUIZ USING CODE
-  // --------------------------------------------------
+  // ── UPDATE QUESTION COUNT ────────────────────────────────────────────────
+  Future<void> _updateQuestionCount(String quizId) async {
+    final snap = await _db
+        .collection('quizzes')
+        .doc(quizId)
+        .collection('questions')
+        .count()
+        .get();
+    await _db.collection('quizzes').doc(quizId).update({
+      'totalQuestions': snap.count ?? 0,
+    });
+  }
+
+  // ── JOIN PRIVATE QUIZ ────────────────────────────────────────────────────
   Future<String> getQuizIdByJoinCode(String inputCode) async {
     final code = inputCode.trim().toUpperCase();
-
-    if (code.length != 6) {
-      throw Exception("Invalid join code");
-    }
+    if (code.length != 6) throw Exception('Invalid join code');
 
     final snap = await _db
         .collection('quizzes')
@@ -120,10 +109,7 @@ class AdminQuizService {
         .limit(1)
         .get();
 
-    if (snap.docs.isEmpty) {
-      throw Exception("Quiz not found");
-    }
-
+    if (snap.docs.isEmpty) throw Exception('Quiz not found');
     return snap.docs.first.id;
   }
 }

@@ -8,9 +8,21 @@ class Language {
     required this.pistonKey,
     required this.version,
   });
+
+  @override
+  bool operator ==(Object other) =>
+      other is Language && other.pistonKey == pistonKey;
+
+  @override
+  int get hashCode => pistonKey.hashCode;
 }
 
 const List<Language> supportedLanguages = [
+  Language(
+    name: "C",
+    pistonKey: "c",
+    version: "10.2.0",
+  ),
   Language(
     name: "C++",
     pistonKey: "cpp",
@@ -23,7 +35,8 @@ const List<Language> supportedLanguages = [
   ),
   Language(
     name: "Python",
-    pistonKey: "python",
+    // FIX: Use "python3" directly — no more relying on _normalizeLanguage
+    pistonKey: "python3",
     version: "3.10.0",
   ),
   Language(
@@ -36,10 +49,13 @@ const List<Language> supportedLanguages = [
 extension LanguageFile on Language {
   String get fileName {
     switch (pistonKey) {
+      case 'c':
+        return 'main.c';
       case 'cpp':
         return 'main.cpp';
       case 'java':
         return 'Main.java';
+      case 'python3':
       case 'python':
         return 'main.py';
       case 'javascript':

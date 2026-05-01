@@ -20,11 +20,15 @@
 //          (Firebase Storage URL) not 'profileImage' (old path).
 // ============================================================
 
+import 'package:QuizSphere/login/login_screen.dart';
 import 'package:QuizSphere/quizes/profile/profile_screen_widget/header_section.dart';
 import 'package:QuizSphere/quizes/profile/profile_screen_widget/info_card.dart';
 import 'package:QuizSphere/quizes/profile/profile_screen_widget/logout_tile.dart';
 import 'package:QuizSphere/quizes/profile/services/level_service.dart';
 import 'package:QuizSphere/quizes/profile/services/streak_service.dart';
+import 'package:QuizSphere/ads/screen/premium_screen.dart';
+import 'package:QuizSphere/ads/provider/premium_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -549,13 +553,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                       const SizedBox(height: 16),
 
+                      // ── Go Premium / Remove Ads ────────────────
+                      _PremiumTile(),
+
+                      const SizedBox(height: 12),
+
                       LogoutTile(
                         onTap: () async {
                           final confirmed = await showDialog<bool>(
                             context: context,
                             builder: (ctx) => AlertDialog(
                               title: const Text('Log Out'),
-                              content: const Text('Are you sure you want to log out?'),
+                              content: const Text(
+                                'Are you sure you want to log out?',
+                              ),
                               actions: [
                                 TextButton(
                                   onPressed: () => Navigator.pop(ctx, false),
@@ -581,8 +592,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     : null,
                               ).signOut();
                             } catch (_) {}
-                            // Sign out Firebase — AuthWrapper stream rebuilds to LoginScreen
+                            // Sign out Firebase
                             await FirebaseAuth.instance.signOut();
+                            // Explicitly navigate to LoginScreen and clear the entire stack
+                            if (context.mounted) {
+                              Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(
+                                  builder: (_) => const LoginScreen(),
+                                ),
+                                (route) => false,
+                              );
+                            }
                           } catch (e) {
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -723,6 +743,73 @@ class _QuickActionTile extends StatelessWidget {
             ),
             const Spacer(),
             const Icon(Icons.chevron_right, color: Colors.white30, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Go Premium tile on profile screen ────────────────────────────────────────
+class _PremiumTile extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isPremium = ref.watch(isPremiumProvider);
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const PremiumScreen()),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            colors: isPremium
+                ? [Colors.teal.withOpacity(0.3), Colors.teal.withOpacity(0.15)]
+                : [
+                    Colors.amber.withOpacity(0.25),
+                    Colors.orange.withOpacity(0.15),
+                  ],
+          ),
+          border: Border.all(
+            color: isPremium
+                ? Colors.tealAccent.withOpacity(0.4)
+                : Colors.amberAccent.withOpacity(0.5),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.workspace_premium,
+              color: isPremium ? Colors.tealAccent : Colors.amberAccent,
+              size: 24,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isPremium ? 'Premium Active ✓' : 'Remove Ads — Go Premium',
+                    style: TextStyle(
+                      color: isPremium ? Colors.tealAccent : Colors.amberAccent,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                  Text(
+                    isPremium
+                        ? 'Enjoying ad-free experience'
+                        : 'Monthly & Lifetime plans available',
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            if (!isPremium)
+              const Icon(Icons.chevron_right, color: Colors.amberAccent),
           ],
         ),
       ),

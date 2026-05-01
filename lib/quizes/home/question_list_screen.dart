@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'quiz_attempt_screen.dart';
 
+/// Shows a pre-quiz overview with MCQ count, Coding count, and separate
+/// START buttons for each section.  Supports MCQ-only, Coding-only, and
+/// Mixed quizzes.
 class QuestionListScreen extends StatelessWidget {
   final String quizId;
   final String quizTitle;
@@ -13,17 +16,28 @@ class QuestionListScreen extends StatelessWidget {
     required this.quizTitle,
   });
 
-  // ================= GET QUIZ END TIME =================
-  Future<DateTime> _getQuizEndAt() async {
+  Future<Map<String, dynamic>> _loadQuizMeta() async {
     final snap = await FirebaseFirestore.instance
         .collection('quizzes')
         .doc(quizId)
         .get();
+    final data = snap.data() ?? {};
 
-    final ts = snap.data()?['endAt'];
-    return ts is Timestamp
+    final ts = data['endAt'];
+    final endAt = ts is Timestamp
         ? ts.toDate()
         : DateTime.now().add(const Duration(minutes: 30));
+
+    final topicId = data['topicId'] ?? '';
+    final topicTitle = data['topicTitle'] ?? quizTitle;
+    final quizType = data['quizType'] ?? 'mcq';
+
+    return {
+      'endAt': endAt,
+      'topicId': topicId,
+      'topicTitle': topicTitle,
+      'quizType': quizType,
+    };
   }
 
   @override
@@ -31,214 +45,302 @@ class QuestionListScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFF0F2027),
       appBar: AppBar(
-        title: Text(quizTitle, style: TextStyle(color: Colors.white)),
+        title: Text(quizTitle, style: const TextStyle(color: Colors.white)),
         backgroundColor: const Color(0xFF0F2027),
         leading: IconButton(
-          onPressed: () {
-            Navigator.pop(context);
-          },
-          icon: Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
         ),
         elevation: 0,
       ),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('quizzes')
-            .doc(quizId)
-            .collection('questions')
-            .where('isActive', isEqualTo: true)
-            .orderBy('createdAt')
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
+      body: FutureBuilder<Map<String, dynamic>>(
+        future: _loadQuizMeta(),
+        builder: (context, meta) {
+          if (!meta.hasData) {
             return const Center(
               child: CircularProgressIndicator(color: Colors.white),
             );
           }
 
-          final docs = snapshot.data!.docs;
+          final endAt = meta.data!['endAt'] as DateTime;
+          final topicId = meta.data!['topicId'] as String;
+          final topicTitle = meta.data!['topicTitle'] as String;
 
-          // Separate MCQ & Coding
-          final mcqQuestions = docs
-              .where((d) => d['type'] != 'coding')
-              .toList();
-          final codingQuestions = docs
-              .where((d) => d['type'] == 'coding')
-              .toList();
+          return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: FirebaseFirestore.instance
+                .collection('quizzes')
+                .doc(quizId)
+                .collection('questions')
+                .where('isActive', isEqualTo: true)
+                .orderBy('createdAt')
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                );
+              }
 
-          final mcqCount = mcqQuestions.length;
-          final codingCount = codingQuestions.length;
+              final docs = snapshot.data!.docs;
 
-          if (mcqCount == 0 && codingCount == 0) {
-            return const Center(
-              child: Text(
-                "No questions available",
-                style: TextStyle(color: Colors.white70),
-              ),
-            );
-          }
+              final mcqDocs = docs.where((d) => d['type'] != 'coding').toList();
+              final codingDocs = docs
+                  .where((d) => d['type'] == 'coding')
+                  .toList();
 
-          return Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                // ===== MCQ CARD =====
-                _infoCard(
-                  title: "MCQ Section",
-                  subtitle: "$mcqCount Questions",
-                  icon: Icons.quiz,
-                  color: Colors.greenAccent,
-                ),
+              final mcqCount = mcqDocs.length;
+              final codingCount = codingDocs.length;
 
-                const SizedBox(height: 16),
+              if (mcqCount == 0 && codingCount == 0) {
+                return const Center(
+                  child: Text(
+                    'No questions available',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                );
+              }
 
-                // ===== CODING CARD =====
-                // _infoCard(
-                //   title: "Coding Section",
-                //   subtitle: "$codingCount Problems",
-                //   icon: Icons.code,
-                //   color: Colors.deepPurpleAccent,
-                // ),
-                const Spacer(),
+              final codingIds = codingDocs.map((d) => d.id).toList();
 
-                // ===== START MCQ =====
-                if (mcqCount > 0)
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.greenAccent,
-                        foregroundColor: Colors.black,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
+              return Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Header ───────────────────────────────────────────
+                    const Text(
+                      'Quiz Overview',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
                       ),
-                      onPressed: () async {
-                        final endAt = await _getQuizEndAt();
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      mcqCount > 0 && codingCount > 0
+                          ? 'This is a Mixed quiz — complete both sections'
+                          : mcqCount > 0
+                          ? 'MCQ only quiz'
+                          : 'Coding only quiz',
+                      style: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 13,
+                      ),
+                    ),
 
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => QuizAttemptScreen(
-                              quizId: quizId,
-                              endAt: endAt,
-                              isDaily: false,
-                              topicId: quizId,
-                              topicTitle: quizTitle,
-                            ),
-                          ),
-                        );
-                      },
+                    const SizedBox(height: 24),
+
+                    // ── Section cards ────────────────────────────────────
+                    if (mcqCount > 0)
+                      _SectionCard(
+                        title: 'MCQ Section',
+                        subtitle:
+                            '$mcqCount question${mcqCount != 1 ? "s" : ""}',
+                        icon: Icons.quiz_outlined,
+                        color: Colors.greenAccent,
+                        tags: ['Multiple choice', 'Auto graded'],
+                      ),
+
+                    if (mcqCount > 0 && codingCount > 0)
+                      const SizedBox(height: 14),
+
+                    if (codingCount > 0)
+                      _SectionCard(
+                        title: 'Coding Section',
+                        subtitle:
+                            '$codingCount problem${codingCount != 1 ? "s" : ""}',
+                        icon: Icons.code_outlined,
+                        color: Colors.deepPurpleAccent,
+                        tags: ['Write code', 'Run & submit'],
+                      ),
+
+                    const Spacer(),
+
+                    // ── Info ─────────────────────────────────────────────
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.06),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       child: const Text(
-                        "START MCQ SECTION",
+                        '⏱  One global timer for the entire quiz\n'
+                        '🔒  No back navigation once started\n'
+                        '📋  Auto-submits when time ends',
                         style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
+                          color: Colors.white60,
+                          fontSize: 12,
+                          height: 1.6,
                         ),
                       ),
                     ),
-                  ),
 
-                if (mcqCount > 0 && codingCount > 0) const SizedBox(height: 12),
+                    const SizedBox(height: 18),
 
-                // ===== START CODING =====
-                if (codingCount > 0)
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.deepPurpleAccent,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      onPressed: () async {
-                        final endAt = await _getQuizEndAt();
-
-                        // ✅ pick FIRST coding question
-                        final firstCodingQuestionId = codingQuestions.first.id;
-
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => CodingQuizScreen(
-                              quizId: quizId,
-                              questionId: firstCodingQuestionId,
-                              endAt: endAt,
+                    // ── Start buttons ─────────────────────────────────────
+                    if (mcqCount > 0)
+                      _startButton(
+                        context: context,
+                        label: 'START MCQ SECTION',
+                        color: Colors.greenAccent,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => QuizAttemptScreen(
+                                quizId: quizId,
+                                endAt: endAt,
+                                isDaily: false,
+                                topicId: topicId,
+                                topicTitle: topicTitle,
+                                isMixed: codingCount > 0,
+                                codingQuestionIds: codingIds,
+                              ),
                             ),
-                          ),
-                        );
-                      },
-                      child: const Text(
-                        "START CODING SECTION",
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
+                          );
+                        },
                       ),
-                    ),
-                  ),
 
-                const SizedBox(height: 20),
+                    if (mcqCount > 0 && codingCount > 0)
+                      const SizedBox(height: 12),
 
-                // ===== INFO =====
-                const Text(
-                  "• You can switch between MCQ and Coding anytime\n"
-                  "• One global timer for the entire quiz\n"
-                  "• Test auto-submits when time ends",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white60,
-                    fontSize: 12,
-                    height: 1.4,
-                  ),
+                    if (codingCount > 0)
+                      _startButton(
+                        context: context,
+                        label: 'START CODING SECTION',
+                        color: Colors.deepPurpleAccent,
+                        textColor: Colors.white,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => CodingQuizScreen(
+                                quizId: quizId,
+                                endAt: endAt,
+                                questionIds: codingIds,
+                                isMixed: mcqCount > 0,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+
+                    const SizedBox(height: 20),
+                  ],
                 ),
-              ],
-            ),
+              );
+            },
           );
         },
       ),
     );
   }
 
-  // ================= INFO CARD =================
-  Widget _infoCard({
-    required String title,
-    required String subtitle,
-    required IconData icon,
+  Widget _startButton({
+    required BuildContext context,
+    required String label,
     required Color color,
+    Color textColor = Colors.black,
+    required VoidCallback onTap,
   }) {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: textColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          elevation: 4,
+        ),
+        onPressed: onTap,
+        child: Text(
+          label,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Section info card ─────────────────────────────────────────────────────────
+class _SectionCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final List<String> tags;
+
+  const _SectionCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.tags,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        color: Colors.white.withOpacity(0.1),
-        border: Border.all(color: Colors.white24),
+        borderRadius: BorderRadius.circular(18),
+        color: Colors.white.withOpacity(0.07),
+        border: Border.all(color: color.withOpacity(0.4), width: 1.5),
       ),
       child: Row(
         children: [
           CircleAvatar(
             backgroundColor: color.withOpacity(0.2),
-            child: Icon(icon, color: color),
+            radius: 26,
+            child: Icon(icon, color: color, size: 26),
           ),
           const SizedBox(width: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(subtitle, style: const TextStyle(color: Colors.white70)),
-            ],
+                const SizedBox(height: 4),
+                Text(subtitle, style: const TextStyle(color: Colors.white70)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  children: tags
+                      .map(
+                        (t) => Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: color.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            t,
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
+            ),
           ),
         ],
       ),

@@ -20,6 +20,8 @@ import 'dart:ui' show FontFeature;
 
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+import 'package:QuizSphere/compiler/coding_quiz_screen.dart';
+
 class QuizAttemptScreen extends StatefulWidget {
   final String quizId;
   final DateTime endAt;
@@ -27,6 +29,9 @@ class QuizAttemptScreen extends StatefulWidget {
   // NEW optional fields for integrated rewards
   final String topicId;
   final String topicTitle;
+  // Mixed quiz support
+  final bool isMixed;
+  final List<String> codingQuestionIds;
 
   const QuizAttemptScreen({
     super.key,
@@ -35,6 +40,8 @@ class QuizAttemptScreen extends StatefulWidget {
     required this.isDaily,
     this.topicId = '',
     this.topicTitle = '',
+    this.isMixed = false,
+    this.codingQuestionIds = const [],
   });
 
   @override
@@ -374,6 +381,66 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen>
             ],
           ),
           actions: [
+            // Switch to Coding button for mixed quizzes
+            if (widget.isMixed && widget.codingQuestionIds.isNotEmpty)
+              TextButton.icon(
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      backgroundColor: const Color(0xFF203A43),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      title: const Text(
+                        'Switch to Coding?',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      content: const Text(
+                        'Your MCQ answers will be saved. You can switch back anytime.',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Cancel',
+                              style: TextStyle(color: Colors.white60)),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.deepPurpleAccent,
+                          ),
+                          child: const Text('Switch',
+                              style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmed == true && mounted) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CodingQuizScreen(
+                          quizId: widget.quizId,
+                          endAt: widget.endAt,
+                          questionIds: widget.codingQuestionIds,
+                          isMixed: true,
+                        ),
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.code, color: Colors.deepPurpleAccent, size: 16),
+                label: const Text(
+                  'Coding',
+                  style: TextStyle(
+                    color: Colors.deepPurpleAccent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
             // Anti-cheat warning indicator
             if (_backgroundCount > 0)
               Padding(

@@ -18,10 +18,8 @@ class HistoryScreen extends StatelessWidget {
       return const Scaffold(
         backgroundColor: Colors.black,
         body: Center(
-          child: Text(
-            "Please login",
-            style: TextStyle(color: Colors.white70),
-          ),
+          child: Text('Please login',
+              style: TextStyle(color: Colors.white70)),
         ),
       );
     }
@@ -44,16 +42,13 @@ class HistoryScreen extends StatelessWidget {
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(
-                  child: CircularProgressIndicator(color: Colors.white),
-                );
+                    child: CircularProgressIndicator(color: Colors.white));
               }
 
               if (snapshot.hasError) {
                 return Center(
-                  child: Text(
-                    "Error: ${snapshot.error}",
-                    style: const TextStyle(color: Colors.redAccent),
-                  ),
+                  child: Text('Error: ${snapshot.error}',
+                      style: const TextStyle(color: Colors.redAccent)),
                 );
               }
 
@@ -61,36 +56,45 @@ class HistoryScreen extends StatelessWidget {
 
               if (allDocs.isEmpty) {
                 return const Center(
-                  child: Text(
-                    "No quiz attempts yet",
-                    style: TextStyle(color: Colors.white70),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.history, color: Colors.white24, size: 60),
+                      SizedBox(height: 12),
+                      Text('No quiz attempts yet',
+                          style: TextStyle(color: Colors.white70, fontSize: 16)),
+                      SizedBox(height: 4),
+                      Text('Complete a quiz to see it here',
+                          style: TextStyle(color: Colors.white38, fontSize: 13)),
+                    ],
                   ),
                 );
               }
 
-              // ✅ FIXED SAFE FILTERING
-              final dailyDocs = allDocs.where((d) {
-                final data = d.data();
-                return (data['isDaily'] ?? false) == true;
+              // Filter out per-question coding docs — only show summary + mcq
+              final displayDocs = allDocs.where((d) {
+                final t = d.data()['type']?.toString() ?? '';
+                // Hide individual coding question sub-attempts
+                return t != 'coding';
               }).toList();
 
-              final normalDocs = allDocs.where((d) {
-                final data = d.data();
-                return (data['isDaily'] ?? false) != true;
-              }).toList();
+              final dailyDocs  = displayDocs.where((d) =>
+                  (d.data()['isDaily'] ?? false) == true).toList();
+              final normalDocs = displayDocs.where((d) =>
+                  (d.data()['isDaily'] ?? false) != true).toList();
 
               return ListView(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
                 children: [
                   if (dailyDocs.isNotEmpty) ...[
-                    _sectionTitle("Daily Quiz"),
+                    _sectionTitle('Daily Quiz'),
                     const SizedBox(height: 10),
                     ...dailyDocs.map((doc) =>
                         _attemptTile(context, doc, isDaily: true)),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 24),
                   ],
                   if (normalDocs.isNotEmpty) ...[
-                    _sectionTitle("Other Quizzes"),
+                    _sectionTitle('Quiz History'),
                     const SizedBox(height: 10),
                     ...normalDocs.map((doc) =>
                         _attemptTile(context, doc, isDaily: false)),
@@ -104,8 +108,7 @@ class HistoryScreen extends StatelessWidget {
     );
   }
 
-  // ================= ATTEMPT TILE =================
-
+  // ── Attempt tile ──────────────────────────────────────────────────────────
   Widget _attemptTile(
     BuildContext context,
     QueryDocumentSnapshot<Map<String, dynamic>> doc, {
@@ -114,18 +117,25 @@ class HistoryScreen extends StatelessWidget {
     final data = doc.data();
 
     final String attemptId = doc.id;
-    final String quizId = data['quizId'] ?? '';
-    final String quizTitle = data['quizTitle'] ?? "Quiz";
+    final String quizId    = data['quizId']    ?? '';
+    final String quizTitle = data['quizTitle'] ?? 'Quiz';
+    final String type      = data['type']      ?? 'mcq';
 
-    final int score = (data['score'] ?? 0);
-    final int total = (data['total'] ?? 1);
-    final double percentage = (data['percentage'] ?? 0).toDouble();
-    final bool passed = (data['passed'] ?? false);
+    // Support both field names
+    final int    score      = (data['score']      ?? data['totalScore'] ?? 0) as int;
+    final int    total      = (data['total']       ?? data['totalMax']   ?? 1) as int;
+    final double percentage = (data['percentage']  ?? 0).toDouble();
+    final bool   passed     = (data['passed']      ?? false) as bool;
 
     final Timestamp? ts = data['submittedAt'];
-    final String date = ts != null
+    final String date   = ts != null
         ? DateFormat('dd MMM yyyy, hh:mm a').format(ts.toDate())
         : '';
+
+    final bool   isCoding = type == 'coding_summary';
+    final Color  accentColor = isCoding
+        ? Colors.deepPurpleAccent
+        : Colors.blueAccent;
 
     final Color percentColor = passed
         ? Colors.greenAccent
@@ -140,12 +150,12 @@ class HistoryScreen extends StatelessWidget {
         onTap: () async {
           if (quizId.isEmpty) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Invalid quiz data")),
+              const SnackBar(content: Text('Invalid quiz data')),
             );
             return;
           }
 
-          // ✅ DAILY FLOW
+          // Daily flow
           if (isDaily) {
             Navigator.push(
               context,
@@ -159,115 +169,166 @@ class HistoryScreen extends StatelessWidget {
             return;
           }
 
-          // ✅ NORMAL QUIZ FLOW
+          // Normal / coding flow
           final quizSnap = await FirebaseFirestore.instance
               .collection('quizzes')
               .doc(quizId)
               .get();
 
           if (!quizSnap.exists) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Quiz not found")),
-            );
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Quiz not found')),
+              );
+            }
             return;
           }
 
           final quiz = quizSnap.data()!;
-
-          final Timestamp? endTimestamp = quiz['endAt'];
-          final DateTime? endAt = endTimestamp?.toDate();
-          final double passPercentage =
+          final Timestamp? endTs    = quiz['endAt'];
+          final DateTime?  endAt    = endTs?.toDate();
+          final double     passPct  =
               (quiz['passPercentage'] ?? 60).toDouble();
 
-          // 🔒 LOCKED RESULT
+          // Locked result
           if (endAt != null && DateTime.now().isBefore(endAt)) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => QuizResultLockedScreen(endAt: endAt),
-              ),
-            );
+            if (context.mounted) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => QuizResultLockedScreen(endAt: endAt),
+                ),
+              );
+            }
             return;
           }
 
-          // ✅ RESULT SCREEN
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => QuizResultScreen(
-                quizId: quizId,
-                attemptId: attemptId,
-                quizTitle: quizTitle,
-                score: score,
-                total: total,
-                percentage: percentage,
-                endAt: endAt ?? DateTime.now(),
-                passed: passed,
-                passPercentage: passPercentage,
+          if (context.mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => QuizResultScreen(
+                  quizId:         quizId,
+                  attemptId:      attemptId,
+                  quizTitle:      quizTitle,
+                  score:          score,
+                  total:          total,
+                  percentage:     percentage,
+                  endAt:          endAt ?? DateTime.now(),
+                  passed:         passed,
+                  passPercentage: passPct,
+                ),
               ),
-            ),
-          );
+            );
+          }
         },
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
-            color: Colors.white.withOpacity(0.12),
+            color: Colors.white.withOpacity(0.10),
             border: Border.all(
-              color: Colors.white.withOpacity(0.25),
+              color: isCoding
+                  ? Colors.deepPurpleAccent.withOpacity(0.4)
+                  : Colors.white.withOpacity(0.2),
             ),
           ),
           child: Row(
             children: [
+              // ── Score circle ────────────────────────────────────────────
               Container(
                 width: 58,
                 height: 58,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: percentColor.withOpacity(0.25),
-                  border: Border.all(color: percentColor),
+                  color: percentColor.withOpacity(0.2),
+                  border: Border.all(color: percentColor, width: 2),
                 ),
                 alignment: Alignment.center,
                 child: Text(
-                  "${percentage.toStringAsFixed(0)}%",
+                  '${percentage.toStringAsFixed(0)}%',
                   style: TextStyle(
                     color: percentColor,
                     fontWeight: FontWeight.bold,
+                    fontSize: 13,
                   ),
                 ),
               ),
+
               const SizedBox(width: 14),
+
+              // ── Details ─────────────────────────────────────────────────
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      quizTitle,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
+                    // Title + type badge
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            quizTitle,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                        // Type chip
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: accentColor.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color: accentColor.withOpacity(0.5)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isCoding ? Icons.code : Icons.quiz_outlined,
+                                color: accentColor,
+                                size: 11,
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                isCoding ? 'Coding' : 'MCQ',
+                                style: TextStyle(
+                                  color: accentColor,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 5),
                     Text(
-                      "Score: $score / $total",
+                      'Score: $score / $total',
                       style: const TextStyle(color: Colors.white70),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
                     Text(
                       date,
                       style: const TextStyle(
-                        color: Colors.white54,
-                        fontSize: 12,
-                      ),
+                          color: Colors.white38, fontSize: 12),
                     ),
                   ],
                 ),
               ),
+
+              const SizedBox(width: 8),
+
+              // ── Pass/fail icon ───────────────────────────────────────────
               Icon(
                 passed ? Icons.check_circle : Icons.cancel,
                 color: passed ? Colors.greenAccent : Colors.redAccent,
+                size: 26,
               ),
             ],
           ),
@@ -276,6 +337,7 @@ class HistoryScreen extends StatelessWidget {
     );
   }
 
+  // ── Helpers ───────────────────────────────────────────────────────────────
   static Widget _sectionTitle(String text) {
     return Text(
       text,
@@ -291,11 +353,9 @@ class HistoryScreen extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            Color(0xFF0F2027),
-            Color(0xFF203A43),
-            Color(0xFF2C5364),
-          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
         ),
       ),
     );
