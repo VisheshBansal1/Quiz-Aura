@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TEAMID.com.example.quizApp",
+        "paths": [
+          "/quiz/*",
+          "/tournament/*",
+          "/battle/*"
+        ]
+      }
+    ]
+  }
+}

@@ -18,8 +18,7 @@ class HistoryScreen extends StatelessWidget {
       return const Scaffold(
         backgroundColor: Colors.black,
         body: Center(
-          child: Text('Please login',
-              style: TextStyle(color: Colors.white70)),
+          child: Text('Please login', style: TextStyle(color: Colors.white70)),
         ),
       );
     }
@@ -41,14 +40,15 @@ class HistoryScreen extends StatelessWidget {
             stream: attemptsStream,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(
-                    child: CircularProgressIndicator(color: Colors.white));
+                return const _HistorySkeleton();
               }
 
               if (snapshot.hasError) {
                 return Center(
-                  child: Text('Error: ${snapshot.error}',
-                      style: const TextStyle(color: Colors.redAccent)),
+                  child: Text(
+                    'Error: ${snapshot.error}',
+                    style: const TextStyle(color: Colors.redAccent),
+                  ),
                 );
               }
 
@@ -61,11 +61,15 @@ class HistoryScreen extends StatelessWidget {
                     children: [
                       Icon(Icons.history, color: Colors.white24, size: 60),
                       SizedBox(height: 12),
-                      Text('No quiz attempts yet',
-                          style: TextStyle(color: Colors.white70, fontSize: 16)),
+                      Text(
+                        'No quiz attempts yet',
+                        style: TextStyle(color: Colors.white70, fontSize: 16),
+                      ),
                       SizedBox(height: 4),
-                      Text('Complete a quiz to see it here',
-                          style: TextStyle(color: Colors.white38, fontSize: 13)),
+                      Text(
+                        'Complete a quiz to see it here',
+                        style: TextStyle(color: Colors.white38, fontSize: 13),
+                      ),
                     ],
                   ),
                 );
@@ -78,10 +82,12 @@ class HistoryScreen extends StatelessWidget {
                 return t != 'coding';
               }).toList();
 
-              final dailyDocs  = displayDocs.where((d) =>
-                  (d.data()['isDaily'] ?? false) == true).toList();
-              final normalDocs = displayDocs.where((d) =>
-                  (d.data()['isDaily'] ?? false) != true).toList();
+              final dailyDocs = displayDocs
+                  .where((d) => (d.data()['isDaily'] ?? false) == true)
+                  .toList();
+              final normalDocs = displayDocs
+                  .where((d) => (d.data()['isDaily'] ?? false) != true)
+                  .toList();
 
               return ListView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
@@ -89,15 +95,17 @@ class HistoryScreen extends StatelessWidget {
                   if (dailyDocs.isNotEmpty) ...[
                     _sectionTitle('Daily Quiz'),
                     const SizedBox(height: 10),
-                    ...dailyDocs.map((doc) =>
-                        _attemptTile(context, doc, isDaily: true)),
+                    ...dailyDocs.map(
+                      (doc) => _attemptTile(context, doc, isDaily: true),
+                    ),
                     const SizedBox(height: 24),
                   ],
                   if (normalDocs.isNotEmpty) ...[
                     _sectionTitle('Quiz History'),
                     const SizedBox(height: 10),
-                    ...normalDocs.map((doc) =>
-                        _attemptTile(context, doc, isDaily: false)),
+                    ...normalDocs.map(
+                      (doc) => _attemptTile(context, doc, isDaily: false),
+                    ),
                   ],
                 ],
               );
@@ -117,31 +125,31 @@ class HistoryScreen extends StatelessWidget {
     final data = doc.data();
 
     final String attemptId = doc.id;
-    final String quizId    = data['quizId']    ?? '';
+    final String quizId = data['quizId'] ?? '';
     final String quizTitle = data['quizTitle'] ?? 'Quiz';
-    final String type      = data['type']      ?? 'mcq';
+    final String type = data['type'] ?? 'mcq';
 
     // Support both field names
-    final int    score      = (data['score']      ?? data['totalScore'] ?? 0) as int;
-    final int    total      = (data['total']       ?? data['totalMax']   ?? 1) as int;
-    final double percentage = (data['percentage']  ?? 0).toDouble();
-    final bool   passed     = (data['passed']      ?? false) as bool;
+    final int score = (data['score'] ?? data['totalScore'] ?? 0) as int;
+    final int total = (data['total'] ?? data['totalMax'] ?? 1) as int;
+    final double percentage = (data['percentage'] ?? 0).toDouble();
+    final bool passed = (data['passed'] ?? false) as bool;
 
     final Timestamp? ts = data['submittedAt'];
-    final String date   = ts != null
+    final String date = ts != null
         ? DateFormat('dd MMM yyyy, hh:mm a').format(ts.toDate())
         : '';
 
-    final bool   isCoding = type == 'coding_summary';
-    final Color  accentColor = isCoding
+    final bool isCoding = type == 'coding_summary';
+    final Color accentColor = isCoding
         ? Colors.deepPurpleAccent
         : Colors.blueAccent;
 
     final Color percentColor = passed
         ? Colors.greenAccent
         : percentage >= 40
-            ? Colors.orangeAccent
-            : Colors.redAccent;
+        ? Colors.orangeAccent
+        : Colors.redAccent;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -149,9 +157,9 @@ class HistoryScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         onTap: () async {
           if (quizId.isEmpty) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Invalid quiz data')),
-            );
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('Invalid quiz data')));
             return;
           }
 
@@ -177,18 +185,17 @@ class HistoryScreen extends StatelessWidget {
 
           if (!quizSnap.exists) {
             if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Quiz not found')),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('Quiz not found')));
             }
             return;
           }
 
           final quiz = quizSnap.data()!;
-          final Timestamp? endTs    = quiz['endAt'];
-          final DateTime?  endAt    = endTs?.toDate();
-          final double     passPct  =
-              (quiz['passPercentage'] ?? 60).toDouble();
+          final Timestamp? endTs = quiz['endAt'];
+          final DateTime? endAt = endTs?.toDate();
+          final double passPct = (quiz['passPercentage'] ?? 60).toDouble();
 
           // Locked result
           if (endAt != null && DateTime.now().isBefore(endAt)) {
@@ -208,14 +215,14 @@ class HistoryScreen extends StatelessWidget {
               context,
               MaterialPageRoute(
                 builder: (_) => QuizResultScreen(
-                  quizId:         quizId,
-                  attemptId:      attemptId,
-                  quizTitle:      quizTitle,
-                  score:          score,
-                  total:          total,
-                  percentage:     percentage,
-                  endAt:          endAt ?? DateTime.now(),
-                  passed:         passed,
+                  quizId: quizId,
+                  attemptId: attemptId,
+                  quizTitle: quizTitle,
+                  score: score,
+                  total: total,
+                  percentage: percentage,
+                  endAt: endAt ?? DateTime.now(),
+                  passed: passed,
                   passPercentage: passPct,
                 ),
               ),
@@ -278,12 +285,15 @@ class HistoryScreen extends StatelessWidget {
                         // Type chip
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 3),
+                            horizontal: 7,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: accentColor.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                                color: accentColor.withOpacity(0.5)),
+                              color: accentColor.withOpacity(0.5),
+                            ),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -316,7 +326,9 @@ class HistoryScreen extends StatelessWidget {
                     Text(
                       date,
                       style: const TextStyle(
-                          color: Colors.white38, fontSize: 12),
+                        color: Colors.white38,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
@@ -358,6 +370,102 @@ class HistoryScreen extends StatelessWidget {
           colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
         ),
       ),
+    );
+  }
+}
+
+// ── History skeleton loading ──────────────────────────────────────────────────
+class _HistorySkeleton extends StatefulWidget {
+  const _HistorySkeleton();
+
+  @override
+  State<_HistorySkeleton> createState() => _HistorySkeletonState();
+}
+
+class _HistorySkeletonState extends State<_HistorySkeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, __) {
+        final shimmer = Color.lerp(
+          Colors.white.withOpacity(0.06),
+          Colors.white.withOpacity(0.15),
+          _anim.value,
+        )!;
+        return ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: 6,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (_, __) => Container(
+            height: 80,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              color: shimmer,
+              border: Border.all(color: Colors.white.withOpacity(0.1)),
+            ),
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.1),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        height: 13,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(6),
+                          color: Colors.white.withOpacity(0.12),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        height: 10,
+                        width: 120,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(5),
+                          color: Colors.white.withOpacity(0.08),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

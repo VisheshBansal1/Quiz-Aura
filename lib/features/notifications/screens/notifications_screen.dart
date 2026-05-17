@@ -17,7 +17,9 @@ class NotificationsScreen extends StatelessWidget {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          Container(decoration: const BoxDecoration(gradient: AppColors.mainGradient)),
+          Container(
+            decoration: const BoxDecoration(gradient: AppColors.mainGradient),
+          ),
           SafeArea(
             child: Column(
               children: [
@@ -26,22 +28,32 @@ class NotificationsScreen extends StatelessWidget {
                   child: Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+                        icon: const Icon(
+                          Icons.arrow_back_ios,
+                          color: Colors.white,
+                        ),
                         onPressed: () => Navigator.pop(context),
                       ),
                       const Expanded(
-                        child: Text('🔔 Notifications',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold)),
+                        child: Text(
+                          '🔔 Notifications',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                       TextButton(
                         onPressed: () => FcmService.markAllRead(uid),
-                        child: const Text('Mark all read',
-                            style: TextStyle(
-                                color: Colors.tealAccent, fontSize: 12)),
+                        child: const Text(
+                          'Mark all read',
+                          style: TextStyle(
+                            color: Colors.tealAccent,
+                            fontSize: 12,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -58,8 +70,7 @@ class NotificationsScreen extends StatelessWidget {
                         .snapshots(),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(
-                            child: CircularProgressIndicator(color: Colors.white));
+                        return const _NotificationSkeleton();
                       }
 
                       final docs = snapshot.data?.docs ?? [];
@@ -71,9 +82,13 @@ class NotificationsScreen extends StatelessWidget {
                             children: [
                               Text('🔔', style: TextStyle(fontSize: 48)),
                               SizedBox(height: 12),
-                              Text('No notifications yet',
-                                  style: TextStyle(
-                                      color: Colors.white60, fontSize: 16)),
+                              Text(
+                                'No notifications yet',
+                                style: TextStyle(
+                                  color: Colors.white60,
+                                  fontSize: 16,
+                                ),
+                              ),
                             ],
                           ),
                         );
@@ -83,10 +98,10 @@ class NotificationsScreen extends StatelessWidget {
                         padding: const EdgeInsets.all(16),
                         itemCount: docs.length,
                         itemBuilder: (_, i) {
-                          final doc  = docs[i];
+                          final doc = docs[i];
                           final data = doc.data();
                           final read = (data['read'] ?? false) as bool;
-                          final ts   = data['createdAt'] as Timestamp?;
+                          final ts = data['createdAt'] as Timestamp?;
                           final time = ts != null
                               ? DateFormat('MMM d, h:mm a').format(ts.toDate())
                               : '';
@@ -133,30 +148,36 @@ class NotificationsScreen extends StatelessWidget {
                                           fontSize: 14,
                                         ),
                                       ),
-                                      if ((data['body'] ?? '').isNotEmpty)
-                                        ...[
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            data['body'],
-                                            style: const TextStyle(
-                                                color: Colors.white60,
-                                                fontSize: 12),
-                                          ),
-                                        ],
-                                      const SizedBox(height: 4),
-                                      Text(time,
+                                      if ((data['body'] ?? '').isNotEmpty) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          data['body'],
                                           style: const TextStyle(
-                                              color: Colors.white38,
-                                              fontSize: 11)),
+                                            color: Colors.white60,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        time,
+                                        style: const TextStyle(
+                                          color: Colors.white38,
+                                          fontSize: 11,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
                                 if (!read)
                                   GestureDetector(
-                                    onTap: () => doc.reference
-                                        .update({'read': true}),
-                                    child: const Icon(Icons.circle,
-                                        color: Colors.tealAccent, size: 10),
+                                    onTap: () =>
+                                        doc.reference.update({'read': true}),
+                                    child: const Icon(
+                                      Icons.circle,
+                                      color: Colors.tealAccent,
+                                      size: 10,
+                                    ),
                                   ),
                               ],
                             ),
@@ -177,12 +198,112 @@ class NotificationsScreen extends StatelessWidget {
   String _notifEmoji(String type) {
     switch (type) {
       case 'battle_invite':
-      case 'battle_start':  return '⚔️';
-      case 'battle_result': return '🏆';
-      case 'tournament':    return '🎯';
-      case 'badge':         return '🏅';
-      case 'result':        return '📊';
-      default:              return '🔔';
+      case 'battle_start':
+        return '⚔️';
+      case 'battle_result':
+        return '🏆';
+      case 'tournament':
+        return '🎯';
+      case 'badge':
+        return '🏅';
+      case 'result':
+        return '📊';
+      default:
+        return '🔔';
     }
+  }
+}
+
+// ── Notification skeleton loading ─────────────────────────────────────────────
+class _NotificationSkeleton extends StatefulWidget {
+  const _NotificationSkeleton();
+  @override
+  State<_NotificationSkeleton> createState() => _NotificationSkeletonState();
+}
+
+class _NotificationSkeletonState extends State<_NotificationSkeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, __) {
+        final shimmer = Color.lerp(
+          Colors.white.withOpacity(0.06),
+          Colors.white.withOpacity(0.15),
+          _anim.value,
+        )!;
+        return ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: 7,
+          separatorBuilder: (_, __) => const SizedBox(height: 10),
+          itemBuilder: (_, __) => Container(
+            height: 70,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              color: shimmer,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.1),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        height: 12,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(6),
+                          color: Colors.white.withOpacity(0.12),
+                        ),
+                      ),
+                      const SizedBox(height: 7),
+                      Container(
+                        height: 10,
+                        width: 90,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(5),
+                          color: Colors.white.withOpacity(0.07),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 }

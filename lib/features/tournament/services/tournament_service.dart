@@ -1,3 +1,8 @@
+// ============================================================
+// FILE: lib/features/tournament/services/tournament_service.dart
+// ADDED: fetchTournament() — single-fetch by ID (used by chat card)
+// ============================================================
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/models/tournament_model.dart';
@@ -8,6 +13,14 @@ import '../../../core/services/fcm_service.dart';
 class TournamentService {
   static final _db = FirebaseFirestore.instance;
 
+  // ───────────────── FETCH SINGLE TOURNAMENT ─────────────────
+  /// Used by the college chat card to open a tournament by ID.
+  static Future<TournamentModel?> fetchTournament(String id) async {
+    final doc = await _db.collection('tournaments').doc(id).get();
+    if (!doc.exists) return null;
+    return TournamentModel.fromFirestore(doc);
+  }
+
   // ───────────────── CREATE TOURNAMENT ─────────────────
   static Future<String> createTournament({
     required String title,
@@ -17,7 +30,7 @@ class TournamentService {
     required int totalRounds,
     required String prizeDescription,
     required int entryCoins,
-    DateTime? endAt, // auto-set after rounds are added
+    DateTime? endAt,
   }) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) throw Exception('Not logged in');
@@ -42,8 +55,6 @@ class TournamentService {
   }
 
   // ───────────────── SET / UPDATE endAt ─────────────────
-  /// Called after rounds are created.
-  /// endAt is typically lastRound.endAt + 30 minutes, but can be any value.
   static Future<void> updateEndAt({
     required String tournamentId,
     required DateTime endAt,
@@ -54,12 +65,7 @@ class TournamentService {
   }
 
   // ───────────────── END TOURNAMENT NOW (Admin) ─────────────────
-  /// Admin action: immediately close the tournament.
-  /// Sets status = finished and endAt = now so all clients
-  /// detect it as finished via TournamentModel.effectiveStatus.
-  static Future<void> endTournamentNow({
-    required String tournamentId,
-  }) async {
+  static Future<void> endTournamentNow({required String tournamentId}) async {
     await _db.collection('tournaments').doc(tournamentId).update({
       'status': 'finished',
       'endAt': Timestamp.fromDate(DateTime.now()),
@@ -251,7 +257,6 @@ class TournamentService {
                 try {
                   return TournamentModel.fromFirestore(doc);
                 } catch (e) {
-                  print("Error parsing tournament: $e");
                   return null;
                 }
               })

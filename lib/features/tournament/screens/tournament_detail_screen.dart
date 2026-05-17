@@ -13,6 +13,7 @@ import '../services/tournament_play_service.dart';
 import 'tournament_quiz_bridge_screen.dart';
 import 'admin_advance_round_screen.dart';
 import 'tournament_answer_review_screen.dart';
+import '../../../core/services/quiz_share_service.dart';
 
 class TournamentDetailScreen extends StatefulWidget {
   final TournamentModel tournament;
@@ -171,6 +172,16 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen>
               ),
             ),
           ),
+          // ── ADDED: Share button ────────────────────────────
+          IconButton(
+            icon: const Icon(Icons.share_outlined, color: Colors.white70),
+            tooltip: 'Share Tournament',
+            onPressed: () => QuizShareService.showTournamentShareSheet(
+              context: context,
+              tournamentId: t.id,
+              tournamentName: t.title,
+            ),
+          ),
           if (_isAdmin)
             IconButton(
               icon: const Icon(Icons.admin_panel_settings, color: Colors.amber),
@@ -295,11 +306,15 @@ class _RoundsTab extends StatelessWidget {
               children: const [
                 Text('📋', style: TextStyle(fontSize: 40)),
                 SizedBox(height: 12),
-                Text('Rounds not scheduled yet',
-                    style: TextStyle(color: Colors.white60, fontSize: 14)),
+                Text(
+                  'Rounds not scheduled yet',
+                  style: TextStyle(color: Colors.white60, fontSize: 14),
+                ),
                 SizedBox(height: 4),
-                Text('Check back soon!',
-                    style: TextStyle(color: Colors.white38, fontSize: 12)),
+                Text(
+                  'Check back soon!',
+                  style: TextStyle(color: Colors.white38, fontSize: 12),
+                ),
               ],
             ),
           );
@@ -420,7 +435,10 @@ class _RoundCardState extends State<_RoundCard> {
                     const SizedBox(height: 2),
                     Text(
                       'Top ${r.qualifyCount} advance',
-                      style: const TextStyle(color: Colors.white54, fontSize: 12),
+                      style: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
@@ -428,7 +446,10 @@ class _RoundCardState extends State<_RoundCard> {
               if (isLive) _LiveChip(),
               if (isEnded && !isLive)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.grey.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(20),
@@ -449,7 +470,11 @@ class _RoundCardState extends State<_RoundCard> {
 
           Row(
             children: [
-              const Icon(Icons.lock_open_rounded, size: 13, color: Colors.white38),
+              const Icon(
+                Icons.lock_open_rounded,
+                size: 13,
+                color: Colors.white38,
+              ),
               const SizedBox(width: 6),
               Text(
                 'Opens ${DateFormat('MMM dd • h:mm a').format(r.startAt)}',
@@ -554,7 +579,9 @@ class _RoundCardState extends State<_RoundCard> {
                   color: roundEnded ? Colors.tealAccent : Colors.orange,
                 ),
                 label: Text(
-                  roundEnded ? 'Review Answers' : 'Answers Locked Until Round Ends',
+                  roundEnded
+                      ? 'Review Answers'
+                      : 'Answers Locked Until Round Ends',
                   style: TextStyle(
                     color: roundEnded ? Colors.tealAccent : Colors.orange,
                     fontWeight: FontWeight.w600,
@@ -567,7 +594,9 @@ class _RoundCardState extends State<_RoundCard> {
                         ? Colors.tealAccent.withOpacity(0.5)
                         : Colors.orange.withOpacity(0.4),
                   ),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
             ),
@@ -722,7 +751,8 @@ class _InfoGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isEnded = effectiveStatus == TournamentStatus.finished ||
+    final isEnded =
+        effectiveStatus == TournamentStatus.finished ||
         effectiveStatus == TournamentStatus.cancelled;
 
     return GridView.count(
@@ -740,7 +770,8 @@ class _InfoGrid extends StatelessWidget {
         _InfoTile(icon: '🎯', label: '${tournament.totalRounds} Rounds'),
         _InfoTile(
           icon: '👥',
-          label: '${tournament.participantCount}/${tournament.maxParticipants} players',
+          label:
+              '${tournament.participantCount}/${tournament.maxParticipants} players',
         ),
         _InfoTile(
           icon: '🪙',
@@ -846,7 +877,8 @@ class _RegisterButton extends StatelessWidget {
     }
 
     // ── Upcoming ─────────────────────────────────────────────────────────
-    final isFull = tournament.maxParticipants > 0 &&
+    final isFull =
+        tournament.maxParticipants > 0 &&
         tournament.participantCount >= tournament.maxParticipants;
 
     if (isRegistered) {
@@ -968,7 +1000,10 @@ class _LeaderboardTab extends StatelessWidget {
 
         if (all.isEmpty) {
           return const Center(
-            child: Text('No players yet', style: TextStyle(color: Colors.white60)),
+            child: Text(
+              'No players yet',
+              style: TextStyle(color: Colors.white60),
+            ),
           );
         }
 
@@ -1086,20 +1121,28 @@ class _LeaderboardRow extends StatelessWidget {
   Color get _rankColor {
     if (isEliminated) return Colors.grey;
     switch (rank) {
-      case 1: return Colors.amber;
-      case 2: return const Color(0xFFB0BEC5);
-      case 3: return const Color(0xFFCD7F32);
-      default: return Colors.teal;
+      case 1:
+        return Colors.amber;
+      case 2:
+        return const Color(0xFFB0BEC5);
+      case 3:
+        return const Color(0xFFCD7F32);
+      default:
+        return Colors.teal;
     }
   }
 
   String get _rankEmoji {
     if (isEliminated) return '❌';
     switch (rank) {
-      case 1: return '🥇';
-      case 2: return '🥈';
-      case 3: return '🥉';
-      default: return '#$rank';
+      case 1:
+        return '🥇';
+      case 2:
+        return '🥈';
+      case 3:
+        return '🥉';
+      default:
+        return '#$rank';
     }
   }
 
@@ -1112,13 +1155,13 @@ class _LeaderboardRow extends StatelessWidget {
       backgroundColor: isMe
           ? Colors.teal.withOpacity(0.12)
           : isEliminated
-              ? Colors.red.withOpacity(0.04)
-              : null,
+          ? Colors.red.withOpacity(0.04)
+          : null,
       borderColor: isMe
           ? Colors.tealAccent.withOpacity(0.4)
           : rank <= 3 && !isEliminated
-              ? color.withOpacity(0.35)
-              : Colors.white.withOpacity(0.08),
+          ? color.withOpacity(0.35)
+          : Colors.white.withOpacity(0.08),
       child: Row(
         children: [
           SizedBox(
@@ -1166,8 +1209,8 @@ class _LeaderboardRow extends StatelessWidget {
                           color: isMe
                               ? Colors.tealAccent
                               : isEliminated
-                                  ? Colors.white38
-                                  : Colors.white,
+                              ? Colors.white38
+                              : Colors.white,
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
                         ),
@@ -1200,7 +1243,9 @@ class _LeaderboardRow extends StatelessWidget {
                 Text(
                   '${percentage.toStringAsFixed(0)}%',
                   style: TextStyle(
-                    color: isEliminated ? Colors.white24 : color.withOpacity(0.7),
+                    color: isEliminated
+                        ? Colors.white24
+                        : color.withOpacity(0.7),
                     fontSize: 11,
                   ),
                 ),
@@ -1232,8 +1277,10 @@ class _ParticipantsTab extends StatelessWidget {
         final participants = snapshot.data ?? [];
         if (participants.isEmpty) {
           return const Center(
-            child: Text('No participants yet',
-                style: TextStyle(color: Colors.white60)),
+            child: Text(
+              'No participants yet',
+              style: TextStyle(color: Colors.white60),
+            ),
           );
         }
         return ListView.builder(
@@ -1278,14 +1325,19 @@ class _ParticipantsTab extends StatelessWidget {
                           Text(
                             '${p.roundScores.length} round${p.roundScores.length > 1 ? 's' : ''} played',
                             style: const TextStyle(
-                                color: Colors.white38, fontSize: 11),
+                              color: Colors.white38,
+                              fontSize: 11,
+                            ),
                           ),
                       ],
                     ),
                   ),
                   if (p.eliminated)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.red.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(20),
@@ -1301,7 +1353,10 @@ class _ParticipantsTab extends StatelessWidget {
                     )
                   else
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.teal.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(20),

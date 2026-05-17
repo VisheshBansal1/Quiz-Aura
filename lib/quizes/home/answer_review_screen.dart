@@ -17,9 +17,9 @@
 // but quiz_attempt_screen.dart NEVER writes there.
 // It writes the attempt to quizzes/{quizId}/attempts/{uid}.
 
-import 'package:QuizSphere/ads/provider/premium_provider.dart';
-import 'package:QuizSphere/ads/services/admob_service.dart';
-import 'package:QuizSphere/ads/screen/premium_screen.dart';
+// import 'package:QuizSphere/ads/provider/premium_provider.dart'; // ADS DISABLED
+// import 'package:QuizSphere/ads/services/admob_service.dart'; // ADS DISABLED
+// import 'package:QuizSphere/ads/screen/premium_screen.dart'; // ADS DISABLED
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -50,35 +50,20 @@ class _AnswerReviewScreenState extends ConsumerState<AnswerReviewScreen> {
   }
 
   void _initGate() {
-    // Ad control logic: premium users skip the ad gate entirely.
-    final isPremium = ref.read(isPremiumProvider);
-    if (isPremium) {
-      setState(() => _unlocked = true);
-      return;
-    }
-    _showRewardedAd();
+    // ADS DISABLED: unlock immediately without showing any ad
+    setState(() => _unlocked = true);
   }
 
-  void _showRewardedAd() {
-    setState(() => _adLoading = true);
-
-    AdmobService.loadAndShowRewardedAd(
-      onRewarded: () {
-        if (mounted) setState(() => _unlocked = true);
-      },
-      onAdDismissed: () {
-        if (mounted) setState(() => _adLoading = false);
-      },
-      // Fail-open: never permanently block the user if the ad fails.
-      onFailed: () {
-        if (mounted)
-          setState(() {
-            _adLoading = false;
-            _unlocked = true;
-          });
-      },
-    );
-  }
+  // void _showRewardedAd() { // ADS DISABLED
+  //   setState(() => _adLoading = true);
+  //   AdmobService.loadAndShowRewardedAd(
+  //     onRewarded: () { if (mounted) setState(() => _unlocked = true); },
+  //     onAdDismissed: () { if (mounted) setState(() => _adLoading = false); },
+  //     onFailed: () {
+  //       if (mounted) setState(() { _adLoading = false; _unlocked = true; });
+  //     },
+  //   );
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -113,83 +98,82 @@ class _AnswerReviewScreenState extends ConsumerState<AnswerReviewScreen> {
       body: Stack(
         children: [
           _gradientBg(),
-          if (!_unlocked)
-            _AdGateOverlay(isLoading: _adLoading, onWatchAd: _showRewardedAd)
-          else
-            FutureBuilder<_ReviewData>(
-              future: _fetchData(user.uid),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
+          // ADS DISABLED: _unlocked is always true; review shows immediately
+          // if (!_unlocked) ... _AdGateOverlay ... else
+          FutureBuilder<_ReviewData>(
+            future: _fetchData(user.uid),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(
+                        color: Colors.tealAccent,
+                        strokeWidth: 2.5,
+                      ),
+                      SizedBox(height: 16),
+                      Text(
+                        'Loading answers…',
+                        style: TextStyle(color: Colors.white60, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              if (snapshot.hasError) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        CircularProgressIndicator(
-                          color: Colors.tealAccent,
-                          strokeWidth: 2.5,
+                        const Icon(
+                          Icons.error_outline,
+                          color: Colors.redAccent,
+                          size: 48,
                         ),
-                        SizedBox(height: 16),
+                        const SizedBox(height: 12),
                         Text(
-                          'Loading answers…',
-                          style: TextStyle(color: Colors.white60, fontSize: 13),
+                          'Could not load review.\n${snapshot.error}',
+                          style: const TextStyle(color: Colors.white70),
+                          textAlign: TextAlign.center,
                         ),
                       ],
                     ),
-                  );
-                }
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.error_outline,
-                            color: Colors.redAccent,
-                            size: 48,
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Could not load review.\n${snapshot.error}',
-                            style: const TextStyle(color: Colors.white70),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }
-                if (!snapshot.hasData || snapshot.data!.questions.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      'No questions found',
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                  );
-                }
-
-                final data = snapshot.data!;
-                return ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-                  itemCount: data.questions.length,
-                  itemBuilder: (context, i) {
-                    final qDoc = data.questions[i];
-                    final q = qDoc.data();
-                    final qId = qDoc.id;
-                    return _ReviewCard(
-                      index: i + 1,
-                      question: (q['question'] ?? q['title'] ?? '').toString(),
-                      options: List<String>.from(q['options'] as List? ?? []),
-                      correctIndex: q['correctIndex'] as int?,
-                      selectedIndex: data.answers[qId],
-                      explanation: (q['solution'] ?? q['explanation'] ?? '')
-                          .toString(),
-                    );
-                  },
+                  ),
                 );
-              },
-            ),
+              }
+              if (!snapshot.hasData || snapshot.data!.questions.isEmpty) {
+                return const Center(
+                  child: Text(
+                    'No questions found',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                );
+              }
+
+              final data = snapshot.data!;
+              return ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+                itemCount: data.questions.length,
+                itemBuilder: (context, i) {
+                  final qDoc = data.questions[i];
+                  final q = qDoc.data();
+                  final qId = qDoc.id;
+                  return _ReviewCard(
+                    index: i + 1,
+                    question: (q['question'] ?? q['title'] ?? '').toString(),
+                    options: List<String>.from(q['options'] as List? ?? []),
+                    correctIndex: q['correctIndex'] as int?,
+                    selectedIndex: data.answers[qId],
+                    explanation: (q['solution'] ?? q['explanation'] ?? '')
+                        .toString(),
+                  );
+                },
+              );
+            },
+          ),
         ],
       ),
     );
@@ -231,95 +215,7 @@ class _AnswerReviewScreenState extends ConsumerState<AnswerReviewScreen> {
   );
 }
 
-// ── Ad gate overlay ────────────────────────────────────────────────────────────
-class _AdGateOverlay extends StatelessWidget {
-  final bool isLoading;
-  final VoidCallback onWatchAd;
-
-  const _AdGateOverlay({required this.isLoading, required this.onWatchAd});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.tealAccent.withOpacity(0.1),
-                border: Border.all(color: Colors.tealAccent.withOpacity(0.4)),
-              ),
-              child: const Icon(
-                Icons.play_circle_outline,
-                color: Colors.tealAccent,
-                size: 52,
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Watch a short ad to\nunlock your review',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                height: 1.4,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'Go Premium to skip ads forever.',
-              style: TextStyle(color: Colors.white54, fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            TextButton.icon(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const PremiumScreen()),
-              ),
-              icon: const Icon(
-                Icons.workspace_premium,
-                color: Colors.amberAccent,
-                size: 16,
-              ),
-              label: const Text(
-                'Upgrade to Premium',
-                style: TextStyle(color: Colors.amberAccent),
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (isLoading)
-              const CircularProgressIndicator(color: Colors.tealAccent)
-            else
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton.icon(
-                  onPressed: onWatchAd,
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text(
-                    'Watch Ad & Review',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.tealAccent,
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+// ── _AdGateOverlay class — ADS DISABLED, class removed ──────────────────────
 
 // ── Review card ────────────────────────────────────────────────────────────────
 class _ReviewCard extends StatelessWidget {

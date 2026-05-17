@@ -1,0 +1,18 @@
+# ================================================================
+# FILE: netlify/_redirects
+# Place this file in the ROOT of your Netlify deployment folder.
+#
+# How it works:
+#   /quiz/abc123       → serves quiz.html (which reads :id from the URL)
+#   /tournament/abc123 → serves tournament.html
+#   All other paths    → serves index.html (Flutter web SPA fallback)
+# ================================================================
+
+# Quiz deep links  → quiz landing page
+/quiz/*            /quiz.html          200
+
+# Tournament deep links → tournament landing page
+/tournament/*      /tournament.html    200
+
+# Flutter web SPA — must be LAST (catch-all fallback)
+/*                 /index.html         200

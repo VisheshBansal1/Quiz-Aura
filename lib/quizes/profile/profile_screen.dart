@@ -20,14 +20,15 @@
 //          (Firebase Storage URL) not 'profileImage' (old path).
 // ============================================================
 
+import 'package:QuizSphere/features/college/screens/college_hub_screen.dart';
 import 'package:QuizSphere/login/login_screen.dart';
 import 'package:QuizSphere/quizes/profile/profile_screen_widget/header_section.dart';
 import 'package:QuizSphere/quizes/profile/profile_screen_widget/info_card.dart';
 import 'package:QuizSphere/quizes/profile/profile_screen_widget/logout_tile.dart';
 import 'package:QuizSphere/quizes/profile/services/level_service.dart';
 import 'package:QuizSphere/quizes/profile/services/streak_service.dart';
-import 'package:QuizSphere/ads/screen/premium_screen.dart';
-import 'package:QuizSphere/ads/provider/premium_provider.dart';
+// import 'package:QuizSphere/ads/screen/premium_screen.dart'; // ADS DISABLED
+// import 'package:QuizSphere/ads/provider/premium_provider.dart'; // ADS DISABLED
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -146,9 +147,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 .snapshots(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(
-                  child: CircularProgressIndicator(color: Colors.white),
-                );
+                return const _ProfileSkeleton();
               }
 
               if (!snapshot.hasData || !snapshot.data!.exists) {
@@ -492,9 +491,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 onTap: () => Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => CollegeLeaderboardScreen(
-                                      collegeId: collegeId,
-                                      collegeName: collegeName,
+                                    builder: (_) => CollegeHubScreen(
+                                      collegeId: collegeId!,
+                                      collegeName: collegeName!,
                                     ),
                                   ),
                                 ),
@@ -553,9 +552,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                       const SizedBox(height: 16),
 
-                      // ── Go Premium / Remove Ads ────────────────
-                      _PremiumTile(),
-
+                      // ── Go Premium / Remove Ads — ADS DISABLED ──
+                      // _PremiumTile(), // ADS DISABLED
                       const SizedBox(height: 12),
 
                       LogoutTile(
@@ -750,68 +748,116 @@ class _QuickActionTile extends StatelessWidget {
   }
 }
 
-// ── Go Premium tile on profile screen ────────────────────────────────────────
-class _PremiumTile extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isPremium = ref.watch(isPremiumProvider);
+// ── Go Premium tile — ADS DISABLED ──────────────────────────────────────────
+// _PremiumTile class removed. Ads and payments are disabled in this build.
 
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const PremiumScreen()),
-      ),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            colors: isPremium
-                ? [Colors.teal.withOpacity(0.3), Colors.teal.withOpacity(0.15)]
-                : [
-                    Colors.amber.withOpacity(0.25),
-                    Colors.orange.withOpacity(0.15),
-                  ],
-          ),
-          border: Border.all(
-            color: isPremium
-                ? Colors.tealAccent.withOpacity(0.4)
-                : Colors.amberAccent.withOpacity(0.5),
-          ),
+// ── Profile skeleton loading ──────────────────────────────────────────────────
+class _ProfileSkeleton extends StatefulWidget {
+  const _ProfileSkeleton();
+
+  @override
+  State<_ProfileSkeleton> createState() => _ProfileSkeletonState();
+}
+
+class _ProfileSkeletonState extends State<_ProfileSkeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Widget _bar(double w, double h) => AnimatedBuilder(
+    animation: _anim,
+    builder: (_, __) => Container(
+      width: w,
+      height: h,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(h / 2),
+        color: Color.lerp(
+          Colors.white.withOpacity(0.07),
+          Colors.white.withOpacity(0.18),
+          _anim.value,
         ),
-        child: Row(
-          children: [
-            Icon(
-              Icons.workspace_premium,
-              color: isPremium ? Colors.tealAccent : Colors.amberAccent,
-              size: 24,
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isPremium ? 'Premium Active ✓' : 'Remove Ads — Go Premium',
-                    style: TextStyle(
-                      color: isPremium ? Colors.tealAccent : Colors.amberAccent,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
-                  ),
-                  Text(
-                    isPremium
-                        ? 'Enjoying ad-free experience'
-                        : 'Monthly & Lifetime plans available',
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
-                  ),
-                ],
+      ),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          const SizedBox(height: 24),
+          // Avatar circle
+          AnimatedBuilder(
+            animation: _anim,
+            builder: (_, __) => Container(
+              width: 90,
+              height: 90,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Color.lerp(
+                  Colors.white.withOpacity(0.08),
+                  Colors.white.withOpacity(0.2),
+                  _anim.value,
+                ),
               ),
             ),
-            if (!isPremium)
-              const Icon(Icons.chevron_right, color: Colors.amberAccent),
+          ),
+          const SizedBox(height: 16),
+          _bar(140, 18),
+          const SizedBox(height: 10),
+          _bar(100, 13),
+          const SizedBox(height: 32),
+          // Stats row placeholders
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              for (int i = 0; i < 3; i++)
+                Column(
+                  children: [
+                    _bar(50, 22),
+                    const SizedBox(height: 8),
+                    _bar(60, 12),
+                  ],
+                ),
+            ],
+          ),
+          const SizedBox(height: 28),
+          // Card placeholders
+          for (int i = 0; i < 4; i++) ...[
+            AnimatedBuilder(
+              animation: _anim,
+              builder: (_, __) => Container(
+                height: 56,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  color: Color.lerp(
+                    Colors.white.withOpacity(0.06),
+                    Colors.white.withOpacity(0.14),
+                    _anim.value,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
           ],
-        ),
+        ],
       ),
     );
   }

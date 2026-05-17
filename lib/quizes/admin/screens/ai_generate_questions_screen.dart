@@ -11,8 +11,8 @@
 //   starting the ad load. This shows the overlay instantly.
 // ────────────────────────────────────────────────────────────────────────────
 
-import 'package:QuizSphere/ads/provider/premium_provider.dart';
-import 'package:QuizSphere/ads/services/admob_service.dart';
+// import 'package:QuizSphere/ads/provider/premium_provider.dart'; // ADS DISABLED
+// import 'package:QuizSphere/ads/services/admob_service.dart'; // ADS DISABLED
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -106,43 +106,9 @@ class _AiGenerateQuestionsScreenState
       return;
     }
 
-    final isPremium = ref.read(isPremiumProvider);
-
-    if (isPremium) {
-      // Premium: go straight to generation
-      await _doGenerate();
-      return;
-    }
-
-    // ── Free user: show rewarded ad first ──────────────────────────────────
-    // FIX: Set _adLoading = true IMMEDIATELY so the overlay appears RIGHT
-    // when the button is tapped. Previously loading was only set inside
-    // _doGenerate() which runs 5+ seconds later — causing the app to look
-    // frozen while the ad was silently loading in the background.
-    setState(() => _adLoading = true);
-
-    AdmobService.loadAndShowRewardedAd(
-      onRewarded: () {
-        // User watched the ad — proceed to generate
-        if (mounted) setState(() => _adLoading = false);
-        _doGenerate();
-      },
-      onAdDismissed: () {
-        // Ad closed without reward — still generate (fail-open UX)
-        // Note: onRewarded fires BEFORE onAdDismissed, so _adLoading
-        // may already be false here. This handles the "skipped" case.
-        if (mounted && _adLoading) {
-          setState(() => _adLoading = false);
-          _doGenerate();
-        }
-      },
-      onFailed: () {
-        // Ad failed to load — fail-open: generate anyway
-        debugPrint('[AdMob] Rewarded ad failed — generating without ad');
-        if (mounted) setState(() => _adLoading = false);
-        _doGenerate();
-      },
-    );
+    // ADS DISABLED: always go straight to generation
+    // final isPremium = ref.read(isPremiumProvider);
+    await _doGenerate();
   }
 
   // ─────────────────────────────────────────────────────────────────────────

@@ -4,17 +4,18 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  // ✅ FIX: All three fields are `late` so they are only constructed
+  // when first accessed (i.e. when a login method is actually called),
+  // not on AuthService() construction. This prevents the
+  // "No Firebase App [DEFAULT]" crash that happens when LoginScreen
+  // creates AuthService() before Firebase.initializeApp() completes.
+  late final FirebaseAuth _auth = FirebaseAuth.instance;
+  late final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // On web, GoogleSignIn requires clientId explicitly.
-  // On Android/iOS it reads from google-services.json / GoogleService-Info.plist.
-  // Using the wrong setup on either platform causes silent failures.
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    clientId: kIsWeb
-        ? '296193820246-6bqlgd3ss35q0pgclm4c7jj538kq7e4a.apps.googleusercontent.com'
-        : null,
-  );
+  // `late` also prevents the google_sign_in_web assertion crash on web.
+  // On web, loginWithGoogle() uses signInWithPopup() and never accesses
+  // _googleSignIn, so its constructor never runs.
+  late final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   // ================= SAVE USER =================
   Future<void> _saveUser(User user, {String? name}) async {
@@ -76,7 +77,10 @@ class AuthService {
 
   // ================= REGISTER EMAIL =================
   Future<User> registerWithEmail(
-      String email, String password, String name) async {
+    String email,
+    String password,
+    String name,
+  ) async {
     try {
       final cred = await _auth.createUserWithEmailAndPassword(
         email: email,
@@ -95,8 +99,27 @@ class AuthService {
   // ================= GOOGLE LOGIN =================
   Future<User> loginWithGoogle() async {
     try {
-      final GoogleSignInAccount? googleUser =
-          await _googleSignIn.signIn();
+      // ===== WEB =====
+      // signInWithPopup opens a Google sign-in popup window.
+      // _googleSignIn is never accessed here so its lazy constructor
+      // never fires on web (avoids the ClientID assertion crash).
+      //
+      // REQUIREMENT: Your Google account must be added as a test user in
+      // Google Cloud Console → APIs & Services → OAuth consent screen
+      // → Test users, OR publish the app.
+      // Without this, the popup/redirect shows a blank page.
+      if (kIsWeb) {
+        final GoogleAuthProvider googleProvider = GoogleAuthProvider();
+        final UserCredential userCred = await _auth.signInWithPopup(
+          googleProvider,
+        );
+        final user = userCred.user!;
+        await _saveUser(user);
+        return user;
+      }
+
+      // ===== ANDROID / IOS =====
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
       if (googleUser == null) {
         throw Exception('Google sign-in cancelled');
@@ -105,18 +128,17 @@ class AuthService {
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
 
-      final OAuthCredential credential =
-          GoogleAuthProvider.credential(
+      final OAuthCredential credential = GoogleAuthProvider.credential(
         idToken: googleAuth.idToken,
         accessToken: googleAuth.accessToken,
       );
 
-      final UserCredential userCred =
-          await _auth.signInWithCredential(credential);
+      final UserCredential userCred = await _auth.signInWithCredential(
+        credential,
+      );
 
       final user = userCred.user!;
       await _saveUser(user, name: googleUser.displayName);
-
       return user;
     } catch (e) {
       throw Exception('Google login failed: $e');
@@ -125,15 +147,20 @@ class AuthService {
 
   // ================= LOGOUT =================
   Future<void> logout() async {
-    try {
-      await _googleSignIn.signOut(); // ✅ SAME INSTANCE
-    } catch (_) {}
+    // Guard: never access _googleSignIn on web — its lazy constructor
+    // would throw the ClientID assertion error.
+    if (!kIsWeb) {
+      try {
+        await _googleSignIn.signOut();
+      } catch (_) {}
+    }
     await _auth.signOut();
   }
 
   // ================= AUTH STATE =================
   Stream<User?> authStateChanges() => _auth.authStateChanges();
 
+  // ================= ERROR MAPPING =================
   Exception _mapAuthError(FirebaseAuthException e) {
     switch (e.code) {
       case 'user-not-found':

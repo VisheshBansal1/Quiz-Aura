@@ -730,27 +730,20 @@ class _BattleQuizScreenState extends State<BattleQuizScreen>
         ),
 
         // ── Next / Submit button ─────────────────────────────────────────────
-        // FIXED: Placed OUTSIDE the ScrollView so it is always visible at the
-        // bottom of the screen immediately after the user selects an answer,
-        // regardless of how far the options list scrolls.
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          transitionBuilder: (child, anim) => FadeTransition(
-            opacity: anim,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.4),
-                end: Offset.zero,
-              ).animate(anim),
-              child: child,
-            ),
-          ),
-          // FIX: Show the button when user has answered, even if
-          // the opponent has already finished (_battleEnded=true). Only hide
-          // it after this user has also submitted (_finishCalled=true).
+        // ── Next / Submit button ─────────────────────────────────────────────
+        // FIX: Replaced AnimatedSwitcher (which used SlideTransition starting
+        // at Offset(0,0.4) while transitioning from a 0-height SizedBox.shrink)
+        // with AnimatedSize. The old approach clipped the button inside the
+        // animated 0→height region, making it invisible. AnimatedSize smoothly
+        // grows the container height from 0 to the button's natural height
+        // without any clipping — the child stays top-aligned and is always
+        // fully visible as soon as _answered flips to true.
+        AnimatedSize(
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOut,
+          alignment: Alignment.topCenter,
           child: (_answered && !(_battleEnded && _finishCalled))
               ? Padding(
-                  key: ValueKey('next_pad_$_currentQuestion'),
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -786,7 +779,7 @@ class _BattleQuizScreenState extends State<BattleQuizScreen>
                     ],
                   ),
                 )
-              : const SizedBox.shrink(key: ValueKey('next_hidden')),
+              : const SizedBox.shrink(),
         ),
       ],
     );

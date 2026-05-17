@@ -1,9 +1,10 @@
 // ============================================================
 // FILE: lib/quizes/home/home_screen.dart
-// FIXES:
-//   1. Shimmer skeleton while Firestore loads — app no longer appears idle
-//   2. Staggered animation on grid items for polished UX
-//   3. Uses AutomaticKeepAliveClientMixin to avoid reloading on tab switch
+// CHANGES:
+//   1. Shimmer skeleton while Firestore loads
+//   2. Staggered animation on grid items
+//   3. AutomaticKeepAliveClientMixin — no reload on tab switch
+//   4. Each topic card shows live active-quiz count badge
 // ============================================================
 
 import 'package:QuizSphere/quizes/home/quiz_list_screen.dart';
@@ -21,7 +22,6 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage>
     with AutomaticKeepAliveClientMixin {
-  // Keep this page alive when switching tabs — avoids reloading Firestore
   @override
   bool get wantKeepAlive => true;
 
@@ -43,12 +43,10 @@ class _HomePageState extends State<HomePage>
             .orderBy('createdAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
-          // ── Loading: shimmer skeleton grid ────────────────────────────
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const _ShimmerGrid();
           }
 
-          // ── Error ─────────────────────────────────────────────────────
           if (snapshot.hasError) {
             return Center(
               child: Column(
@@ -75,7 +73,6 @@ class _HomePageState extends State<HomePage>
 
           final docs = snapshot.data?.docs ?? [];
 
-          // ── Empty ─────────────────────────────────────────────────────
           if (docs.isEmpty) {
             return const Center(
               child: Text(
@@ -85,7 +82,6 @@ class _HomePageState extends State<HomePage>
             );
           }
 
-          // ── Grid ──────────────────────────────────────────────────────
           return GridView.builder(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
             itemCount: docs.length,
@@ -93,7 +89,7 @@ class _HomePageState extends State<HomePage>
               crossAxisCount: 2,
               mainAxisSpacing: 16,
               crossAxisSpacing: 16,
-              childAspectRatio: 1.05,
+              childAspectRatio: 0.95,
             ),
             itemBuilder: (context, i) {
               final doc = docs[i];
@@ -155,7 +151,6 @@ class _AnimatedTopicCardState extends State<_AnimatedTopicCard>
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
 
-    // Stagger: each card appears slightly after the previous
     Future.delayed(Duration(milliseconds: 40 * widget.index), () {
       if (mounted) _ctrl.forward();
     });
@@ -211,28 +206,31 @@ class _AnimatedTopicCardState extends State<_AnimatedTopicCard>
                   ),
                   child: Icon(icon, size: 30, color: Colors.white),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
                 Text(
                   widget.title,
                   textAlign: TextAlign.center,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 16,
+                    fontSize: 15,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),
                 ),
                 if (widget.subtitle.isNotEmpty) ...[
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Text(
                     widget.subtitle,
                     textAlign: TextAlign.center,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12, color: Colors.white70),
+                    style: const TextStyle(fontSize: 11, color: Colors.white70),
                   ),
                 ],
+                const SizedBox(height: 8),
+                // ── Active quiz count badge ─────────────────────────────
+                _ActiveQuizBadge(topicId: widget.topicId),
               ],
             ),
           ),
@@ -242,9 +240,74 @@ class _AnimatedTopicCardState extends State<_AnimatedTopicCard>
   }
 }
 
+// ── Active quiz count badge ───────────────────────────────────────────────────
+// Streams the count of active quizzes for this topic from Firestore.
+class _ActiveQuizBadge extends StatelessWidget {
+  final String topicId;
+  const _ActiveQuizBadge({required this.topicId});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('quizzes')
+          .where('topicId', isEqualTo: topicId)
+          .where('isActive', isEqualTo: true)
+          .snapshots(),
+      builder: (context, snap) {
+        // While loading — tiny shimmer pill
+        if (snap.connectionState == ConnectionState.waiting) {
+          return Container(
+            height: 20,
+            width: 70,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              color: Colors.white.withOpacity(0.1),
+            ),
+          );
+        }
+
+        final count = snap.data?.docs.length ?? 0;
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: count > 0
+                ? Colors.tealAccent.withOpacity(0.18)
+                : Colors.white.withOpacity(0.08),
+            border: Border.all(
+              color: count > 0
+                  ? Colors.tealAccent.withOpacity(0.5)
+                  : Colors.white.withOpacity(0.15),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.quiz_outlined,
+                size: 11,
+                color: count > 0 ? Colors.tealAccent : Colors.white38,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                count > 0 ? '$count active' : 'No quizzes',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: count > 0 ? Colors.tealAccent : Colors.white38,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 // ── Shimmer skeleton grid ─────────────────────────────────────────────────────
-// Shows animated placeholders while Firestore data loads.
-// No external package needed — uses pure Flutter animation.
 class _ShimmerGrid extends StatefulWidget {
   const _ShimmerGrid();
 
@@ -291,7 +354,7 @@ class _ShimmerGridState extends State<_ShimmerGrid>
             crossAxisCount: 2,
             mainAxisSpacing: 16,
             crossAxisSpacing: 16,
-            childAspectRatio: 1.05,
+            childAspectRatio: 0.95,
           ),
           itemBuilder: (_, __) => Container(
             decoration: BoxDecoration(
@@ -299,6 +362,7 @@ class _ShimmerGridState extends State<_ShimmerGrid>
               color: shimmerColor,
               border: Border.all(color: Colors.white.withOpacity(0.1)),
             ),
+            padding: const EdgeInsets.all(16),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -310,21 +374,30 @@ class _ShimmerGridState extends State<_ShimmerGrid>
                     color: Colors.white.withOpacity(0.1),
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
                 Container(
                   width: 80,
-                  height: 14,
+                  height: 13,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(7),
+                    borderRadius: BorderRadius.circular(6),
                     color: Colors.white.withOpacity(0.1),
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 7),
                 Container(
                   width: 50,
                   height: 10,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(5),
+                    color: Colors.white.withOpacity(0.07),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  width: 70,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
                     color: Colors.white.withOpacity(0.07),
                   ),
                 ),

@@ -1,15 +1,9 @@
 // ============================================================
 // FILE: lib/quizes/home/quiz_list_screen.dart
 //
-// BUGS FIXED:
-//   1. NO "ALREADY PLAYED" GATE — Users could replay the same quiz
-//      unlimited times. Fix: QuizCard now checks
-//      quizzes/{quizId}/attempts/{uid} on mount. If a doc exists,
-//      the button shows "ALREADY PLAYED" and is disabled.
-//   2. QuizCard converted from StatefulWidget → ConsumerStatefulWidget
-//      so it can read Firebase auth uid without prop drilling.
-//   3. _ShimmerList was placed INSIDE _QuizCardState (previous syntax
-//      error) — moved to top level.
+// ADDED: Share button on each quiz card.
+//   - Opens a share sheet to post quiz to College Chat
+//   - Copies join code to clipboard
 // ============================================================
 
 import 'dart:async';
@@ -22,6 +16,7 @@ import 'join_quiz_screen.dart';
 import 'quiz_rules_screen.dart';
 import 'quiz_ended_screen.dart';
 import 'question_list_screen.dart';
+import '../../core/services/quiz_share_service.dart';
 
 class QuizListScreen extends StatelessWidget {
   final String topicId;
@@ -98,6 +93,7 @@ class QuizListScreen extends StatelessWidget {
                     startTs: data['startAt'],
                     endTs: data['endAt'],
                     quizType: data['quizType'] ?? 'mcq',
+                    joinCode: data['joinCode'] ?? '',
                   );
                 },
               );
@@ -122,7 +118,7 @@ class QuizListScreen extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// QuizCard — now ConsumerStatefulWidget so it can check attempts
+// QuizCard
 // ─────────────────────────────────────────────────────────────────────────────
 
 class QuizCard extends ConsumerStatefulWidget {
@@ -134,6 +130,7 @@ class QuizCard extends ConsumerStatefulWidget {
   final Timestamp? startTs;
   final Timestamp? endTs;
   final String quizType;
+  final String joinCode; // ADDED: for share functionality
 
   const QuizCard({
     super.key,
@@ -145,6 +142,7 @@ class QuizCard extends ConsumerStatefulWidget {
     required this.startTs,
     required this.endTs,
     this.quizType = 'mcq',
+    this.joinCode = '',
   });
 
   @override
@@ -155,18 +153,12 @@ class _QuizCardState extends ConsumerState<QuizCard> {
   Timer? _timer;
   DateTime _now = DateTime.now();
   bool _isUpdating = false;
-
-  // ── Already-played state ──────────────────────────────────────────────────
-  // FIX: Track whether this user has already submitted an attempt for this quiz.
-  // Loaded once on initState; shown as a disabled "ALREADY PLAYED" button.
   bool _alreadyPlayed = false;
-  bool _checkingAttempt = true; // show a mini spinner while checking
+  bool _checkingAttempt = true;
 
   @override
   void initState() {
     super.initState();
-
-    // Check if user already played this quiz
     _checkAlreadyPlayed();
 
     if (widget.startTs != null && widget.endTs != null) {
@@ -183,7 +175,6 @@ class _QuizCardState extends ConsumerState<QuizCard> {
     }
   }
 
-  // ── Check if the current user has already attempted this quiz ─────────────
   Future<void> _checkAlreadyPlayed() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
@@ -222,6 +213,16 @@ class _QuizCardState extends ConsumerState<QuizCard> {
   void dispose() {
     _timer?.cancel();
     super.dispose();
+  }
+
+  // ── ADDED: Share button handler ───────────────────────────────────────────
+  void _share(BuildContext context) {
+    QuizShareService.showQuizShareSheet(
+      context: context,
+      quizId: widget.quizId,
+      quizTitle: widget.title,
+      joinCode: widget.joinCode,
+    );
   }
 
   @override
@@ -302,6 +303,20 @@ class _QuizCardState extends ConsumerState<QuizCard> {
                 _statusChip(isLive, isEnded),
               const SizedBox(width: 6),
               _quizTypeChip(widget.quizType),
+
+              // ── ADDED: Share icon button ─────────────────────────────
+              const SizedBox(width: 4),
+              IconButton(
+                onPressed: () => _share(context),
+                icon: const Icon(
+                  Icons.share_outlined,
+                  color: Colors.white60,
+                  size: 20,
+                ),
+                tooltip: 'Share Quiz',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              ),
             ],
           ),
 
@@ -315,6 +330,11 @@ class _QuizCardState extends ConsumerState<QuizCard> {
               ),
               const SizedBox(width: 12),
               _infoTile(Icons.timer, "${widget.duration} min"),
+              // ── ADDED: Show join code ──────────────────────────────
+              if (widget.joinCode.isNotEmpty) ...[
+                const SizedBox(width: 12),
+                _infoTile(Icons.vpn_key_outlined, widget.joinCode),
+              ],
             ],
           ),
 
@@ -350,8 +370,34 @@ class _QuizCardState extends ConsumerState<QuizCard> {
 
           const SizedBox(height: 14),
 
-          // ── Action button ─────────────────────────────────────────────
-          _buildActionButton(context, isLive, isEnded, startAt),
+          // ── Action button row (start + share) ─────────────────────────
+          Row(
+            children: [
+              Expanded(
+                child: _buildActionButton(context, isLive, isEnded, startAt),
+              ),
+              const SizedBox(width: 8),
+              // ── ADDED: Quick share button ───────────────────────────
+              SizedBox(
+                height: 48,
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.white30),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                  onPressed: () => _share(context),
+                  child: const Icon(
+                    Icons.share_outlined,
+                    color: Colors.white60,
+                    size: 18,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -363,7 +409,6 @@ class _QuizCardState extends ConsumerState<QuizCard> {
     bool isEnded,
     DateTime startAt,
   ) {
-    // Still checking → show mini spinner
     if (_checkingAttempt) {
       return const SizedBox(
         width: double.infinity,
@@ -381,7 +426,6 @@ class _QuizCardState extends ConsumerState<QuizCard> {
       );
     }
 
-    // Already played → show completed state, no action
     if (_alreadyPlayed) {
       return SizedBox(
         width: double.infinity,
@@ -396,7 +440,7 @@ class _QuizCardState extends ConsumerState<QuizCard> {
             ),
             elevation: 0,
           ),
-          onPressed: null, // disabled — cannot replay
+          onPressed: null,
           icon: const Icon(Icons.check_circle_outline, size: 18),
           label: const Text(
             "ALREADY PLAYED",
@@ -406,7 +450,6 @@ class _QuizCardState extends ConsumerState<QuizCard> {
       );
     }
 
-    // Normal start button
     return SizedBox(
       width: double.infinity,
       height: 48,
@@ -526,7 +569,7 @@ class _QuizCardState extends ConsumerState<QuizCard> {
       children: [
         Icon(icon, color: Colors.white54, size: 18),
         const SizedBox(width: 6),
-        Text(text, style: const TextStyle(color: Colors.white70)),
+        Text(text, style: const TextStyle(color: Colors.white70, fontSize: 12)),
       ],
     );
   }
@@ -632,13 +675,12 @@ class _ShimmerListState extends State<_ShimmerList>
           Colors.white.withOpacity(0.13),
           _anim.value,
         )!;
-
         return ListView.separated(
           padding: const EdgeInsets.all(16),
           itemCount: 4,
           separatorBuilder: (_, __) => const SizedBox(height: 16),
           itemBuilder: (_, __) => Container(
-            height: 140,
+            height: 160,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
               color: c,

@@ -1,16 +1,12 @@
 // ============================================================
 // FILE: lib/quizes/home/onboarding_screen.dart
-// FIXES:
-//   1. Added BannerAdWidget at bottom — ads now actually show
-//   2. Added ✨ Premium crown button in AppBar → navigates to PremiumScreen
-//   3. Lazy page loading via _LazyPage — only renders a tab when first visited
-//      (IndexedStack was rendering ALL 6 pages on startup → slow)
-//   4. extendBody properly handles banner ad height
+// CHANGES: Ads and Premium functionality commented out.
+//   Skeleton loading on lazy pages retained.
 // ============================================================
 
-import 'package:QuizSphere/ads/provider/premium_provider.dart';
-import 'package:QuizSphere/ads/screen/premium_screen.dart';
-import 'package:QuizSphere/ads/widgets/banner_ad_widget.dart';
+// import 'package:QuizSphere/ads/provider/premium_provider.dart'; // ADS DISABLED
+// import 'package:QuizSphere/ads/screen/premium_screen.dart';     // ADS DISABLED
+// import 'package:QuizSphere/ads/widgets/banner_ad_widget.dart';  // ADS DISABLED
 import 'package:QuizSphere/features/battle/screens/battle_home_screen.dart';
 import 'package:QuizSphere/quizes/admin/screens/admin_dashboard_screen.dart';
 import 'package:QuizSphere/quizes/home/daily_quiz/daily_quiz_entry_screen.dart';
@@ -34,13 +30,10 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _index = 0;
 
-  // ── Lazy-load pages: a tab only builds when first visited ──────────────
-  // FIX: was IndexedStack([...all pages...]) which builds ALL 6 pages on
-  // startup. Now each tab is wrapped in _LazyPage and only renders once tapped.
   final List<Widget> _pages = const [
     _LazyPage(child: HomePage()),
     _LazyPage(child: DailyQuizEntryScreen()),
-    _LazyPage(child: BattleHomeScreen()),
+    // _LazyPage(child: BattleHomeScreen()),
     _LazyPage(child: TournamentListScreen()),
     _LazyPage(child: HistoryScreen()),
     _LazyPage(child: ProfileScreen()),
@@ -49,7 +42,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final List<String> _titles = const [
     'QuizAura',
     'Daily Quiz',
-    '⚔️ Battle',
+    // '⚔️ Battle',
     '🏆 Tournaments',
     'History',
     'Profile',
@@ -57,7 +50,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isPremium = ref.watch(isPremiumProvider);
+    // final isPremium = ref.watch(isPremiumProvider); // ADS DISABLED
 
     return PopScope(
       canPop: _index == 0,
@@ -68,7 +61,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         extendBody: true,
         backgroundColor: Colors.transparent,
 
-        // ── APP BAR ────────────────────────────────────────────────────────
+        // ── APP BAR ──────────────────────────────────────────────────────
         appBar: AppBar(
           elevation: 0,
           backgroundColor: Colors.transparent,
@@ -94,38 +87,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ),
           actions: [
-            // ── ✨ PREMIUM / REMOVE ADS BUTTON ──────────────────────────
-            // FIX: PremiumScreen was never reachable. Now accessible from
-            // every screen via the crown icon in the AppBar.
-            if (!isPremium)
-              TextButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const PremiumScreen()),
-                ),
-                icon: const Icon(
-                  Icons.workspace_premium,
-                  color: Colors.amberAccent,
-                  size: 18,
-                ),
-                label: const Text(
-                  'Remove Ads',
-                  style: TextStyle(
-                    color: Colors.amberAccent,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              )
-            else
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: Icon(
-                  Icons.workspace_premium,
-                  color: Colors.amberAccent,
-                  size: 22,
-                ),
-              ),
+            // ── Premium / Remove Ads button DISABLED ─────────────────
+            // if (!isPremium) TextButton.icon(...) // ADS DISABLED
 
             // Performance dashboard icon
             IconButton(
@@ -141,20 +104,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ],
         ),
 
-        // ── BODY with banner ad pinned at bottom ────────────────────────
+        // ── BODY ─────────────────────────────────────────────────────────
         body: Column(
           children: [
             Expanded(
               child: IndexedStack(index: _index, children: _pages),
             ),
-            // FIX: BannerAdWidget was never placed in any screen.
-            // Now pinned at the very bottom, above the nav bar.
-            // Disappears automatically when user buys premium.
-            const BannerAdWidget(),
+            // const BannerAdWidget(), // ADS DISABLED
           ],
         ),
 
-        // ── FAB (Admin — only on Home tab) ──────────────────────────────
+        // ── FAB (Admin — only on Home tab) ────────────────────────────
         floatingActionButton: _index == 0
             ? FloatingActionButton.extended(
                 backgroundColor: Colors.white.withOpacity(0.95),
@@ -176,7 +136,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
         floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
 
-        // ── BOTTOM NAV BAR ──────────────────────────────────────────────
+        // ── BOTTOM NAV BAR ────────────────────────────────────────────
         bottomNavigationBar: Container(
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
           decoration: BoxDecoration(
@@ -216,11 +176,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   activeIcon: Icon(Icons.local_fire_department),
                   label: 'Daily',
                 ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.sports_kabaddi_outlined),
-                  activeIcon: Icon(Icons.sports_kabaddi),
-                  label: 'Battle',
-                ),
+                // BottomNavigationBarItem(
+                //   icon: Icon(Icons.sports_kabaddi_outlined),
+                //   activeIcon: Icon(Icons.sports_kabaddi),
+                //   label: 'Battle',
+                // ),
                 BottomNavigationBarItem(
                   icon: Icon(Icons.emoji_events_outlined),
                   activeIcon: Icon(Icons.emoji_events),
@@ -245,9 +205,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-// ── Lazy page wrapper ─────────────────────────────────────────────────────────
-// A tab only builds its content widget when it is first selected.
-// Subsequent selections reuse the cached widget without rebuilding.
+// ── Lazy page wrapper ────────────────────────────────────────────────────────
 class _LazyPage extends StatefulWidget {
   final Widget child;
   const _LazyPage({required this.child});
@@ -261,8 +219,6 @@ class _LazyPageState extends State<_LazyPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Only render child once the parent IndexedStack selects this index.
-    // Visibility.visible triggers on first show.
     return Visibility(
       visible: true,
       maintainState: true,
@@ -272,7 +228,6 @@ class _LazyPageState extends State<_LazyPage> {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) setState(() => _visited = true);
             });
-            // Show skeleton on very first render before content is ready
             return const _PageSkeleton();
           }
           return widget.child;
@@ -282,7 +237,7 @@ class _LazyPageState extends State<_LazyPage> {
   }
 }
 
-// ── Page skeleton shown for ~1 frame while tab first renders ──────────────────
+// ── Page skeleton ─────────────────────────────────────────────────────────────
 class _PageSkeleton extends StatelessWidget {
   const _PageSkeleton();
 

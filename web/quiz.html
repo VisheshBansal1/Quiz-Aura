@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QuizAura – Quiz</title>
+  <meta name="description" content="Join the quiz on QuizAura!" />
+
+  <!-- Open Graph (WhatsApp / Telegram previews) -->
+  <meta property="og:site_name" content="QuizAura" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="https://quizaura.netlify.app/og-banner.png" />
+
+  <!-- Firebase JS SDK -->
+  <script type="module">
+    import { initializeApp }    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, doc, getDoc, Timestamp }
+                                from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    // ── Firebase config (same project as Flutter app) ─────────────────────
+    const app = initializeApp({
+      apiKey:            "AIzaSyAXRZpN-am5AGlAMcfH6JJ9QuWK1LI8WJ8",
+      authDomain:        "quiz-sphere-3ec4d.firebaseapp.com",
+      projectId:         "quiz-sphere-3ec4d",
+      storageBucket:     "quiz-sphere-3ec4d.firebasestorage.app",
+      messagingSenderId: "296193820246",
+      appId:             "1:296193820246:web:b66abb73f51b1b9f6b1df7",
+    });
+    const db = getFirestore(app);
+
+    // ── Extract quiz ID from URL path  /quiz/QUIZ_ID ──────────────────────
+    const pathParts = location.pathname.split("/").filter(Boolean);
+    const quizId = pathParts[1] ?? "";          // /quiz/{quizId}
+
+    window.QUIZ_ID = quizId;
+
+    if (!quizId) {
+      showError("Invalid link — no quiz ID found.");
+    } else {
+      loadQuiz(quizId);
+    }
+
+    async function loadQuiz(id) {
+      try {
+        const snap = await getDoc(doc(db, "quizzes", id));
+        if (!snap.exists()) { showError("This quiz doesn't exist or has been removed."); return; }
+
+        const d = snap.data();
+        const isActive  = d.isActive  ?? true;
+        const endAt     = d.endAt     ? (d.endAt instanceof Timestamp ? d.endAt.toDate() : new Date(d.endAt)) : null;
+        const startAt   = d.startAt   ? (d.startAt instanceof Timestamp ? d.startAt.toDate() : new Date(d.startAt)) : null;
+        const isEnded   = !isActive || (endAt && new Date() > endAt);
+        const questions = d.totalQuestions ?? 0;
+        const mins      = d.durationMinutes ?? 10;
+        const quizType  = d.quizType ?? "mcq";
+
+        // Patch OG tags dynamically
+        setMeta("og:title",       `📚 ${d.title ?? "Quiz"}`);
+        setMeta("og:description", `${questions} questions · ${mins} min · ${isEnded ? "Ended" : "Active"}`);
+        document.title = `${d.title ?? "Quiz"} – QuizAura`;
+
+        renderQuiz({
+          title: d.title ?? "Quiz",
+          questions, mins, quizType,
+          isEnded, startAt, endAt,
+          joinCode: d.joinCode ?? "",
+        });
+      } catch (e) {
+        showError("Failed to load quiz: " + e.message);
+      }
+    }
+
+    function renderQuiz({ title, questions, mins, quizType, isEnded, startAt, endAt, joinCode }) {
+      const card = document.getElementById("card");
+
+      const statusHtml = isEnded
+        ? `<span class="badge ended">⛔ Ended</span>`
+        : `<span class="badge live">✅ Active</span>`;
+
+      const typeLabel = { mcq: "MCQ", coding: "Coding", mixed: "Mixed" }[quizType] ?? "MCQ";
+      const typeColor = { mcq: "#26a69a", coding: "#7c4dff", mixed: "#ff9800" }[quizType] ?? "#26a69a";
+
+      const endStr  = endAt   ? fmtDate(endAt)   : "—";
+      const startStr = startAt ? fmtDate(startAt) : "—";
+
+      card.innerHTML = `
+        <div class="icon">📚</div>
+        <div class="type-pill" style="background:${typeColor}22;color:${typeColor};border:1px solid ${typeColor}66">
+          ${typeLabel}
+        </div>
+        <h1>${esc(title)}</h1>
+        ${statusHtml}
+
+        <div class="meta-grid">
+          <div class="meta-item"><span class="meta-icon">❓</span><span>${questions} Questions</span></div>
+          <div class="meta-item"><span class="meta-icon">⏱</span><span>${mins} min</span></div>
+          <div class="meta-item"><span class="meta-icon">🗓</span><span>Starts ${startStr}</span></div>
+          <div class="meta-item"><span class="meta-icon">🔒</span><span>Ends ${endStr}</span></div>
+          ${joinCode ? `<div class="meta-item code"><span class="meta-icon">🔑</span><span class="code-text">${esc(joinCode)}</span></div>` : ""}
+        </div>
+
+        ${isEnded
+          ? `<div class="ended-box">This quiz has ended. You can no longer attempt it.</div>`
+          : `<button class="btn-primary" onclick="openInApp()">🚀 Open in QuizAura App</button>
+             <p class="hint">Don't have the app? <a href="https://play.google.com/store/apps/details?id=com.example.quiz_app" target="_blank">Download on Play Store</a></p>`
+        }
+      `;
+
+      document.getElementById("loading").style.display = "none";
+      card.style.display = "flex";
+    }
+
+    window.openInApp = function () {
+      const quizId = window.QUIZ_ID;
+      const webUrl = `https://quizaura.netlify.app/quiz/${quizId}`;
+
+      // Android intent URL — opens app if installed, Play Store otherwise
+      const androidPackage = "com.example.quiz_app";   // ← REPLACE with your actual package
+      const intentUrl = `intent://quizaura.netlify.app/quiz/${quizId}#Intent;`
+        + `scheme=https;`
+        + `package=${androidPackage};`
+        + `S.browser_fallback_url=${encodeURIComponent("https://play.google.com/store/apps/details?id=" + androidPackage)};`
+        + `end`;
+
+      const isAndroid = /android/i.test(navigator.userAgent);
+      const isIOS     = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+      if (isAndroid) {
+        window.location.href = intentUrl;
+      } else if (isIOS) {
+        // Universal links just work on iOS if the app is installed.
+        // Try the universal link; if it doesn't open the app, Safari stays here.
+        window.location.href = webUrl;
+      } else {
+        // Desktop — just show the URL
+        alert("Open this link on your phone to launch the QuizAura app:\n\n" + webUrl);
+      }
+    };
+
+    function showError(msg) {
+      document.getElementById("loading").style.display = "none";
+      document.getElementById("error").style.display   = "flex";
+      document.getElementById("error-msg").textContent = msg;
+    }
+
+    function fmtDate(d) {
+      return d.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+    }
+    function esc(s) { return String(s).replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+    function setMeta(prop, content) {
+      let el = document.querySelector(`meta[property="${prop}"]`);
+      if (el) el.setAttribute("content", content);
+    }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+      padding: 16px;
+    }
+
+    .container { width: 100%; max-width: 420px; }
+
+    /* Logo */
+    .logo { text-align: center; margin-bottom: 24px; }
+    .logo-text {
+      font-size: 22px; font-weight: 800; letter-spacing: 1px;
+      color: #fff; display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .logo-text span { color: #64ffda; }
+
+    /* Loading */
+    #loading {
+      display: flex; flex-direction: column; align-items: center; gap: 16px;
+      color: rgba(255,255,255,.6); font-size: 14px;
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid rgba(255,255,255,.15);
+      border-top-color: #64ffda;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Card */
+    #card {
+      display: none; flex-direction: column; align-items: center;
+      gap: 14px; text-align: center;
+      background: rgba(255,255,255,.09);
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 24px; padding: 32px 24px;
+      backdrop-filter: blur(12px);
+    }
+
+    .icon { font-size: 52px; line-height: 1; }
+
+    .type-pill {
+      font-size: 12px; font-weight: 700; padding: 4px 12px;
+      border-radius: 99px; text-transform: uppercase; letter-spacing: .5px;
+    }
+
+    h1 { color: #fff; font-size: 22px; font-weight: 700; line-height: 1.3; }
+
+    .badge {
+      font-size: 13px; font-weight: 700; padding: 6px 14px;
+      border-radius: 99px; display: inline-flex; align-items: center; gap: 4px;
+    }
+    .badge.live   { background: rgba(100,255,218,.15); color: #64ffda; border: 1px solid rgba(100,255,218,.4); }
+    .badge.ended  { background: rgba(255,82,82,.15);   color: #ff5252; border: 1px solid rgba(255,82,82,.4); }
+
+    .meta-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 10px; width: 100%;
+    }
+    .meta-item {
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 12px; padding: 10px 12px;
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; color: rgba(255,255,255,.8);
+    }
+    .meta-item.code { grid-column: 1/-1; }
+    .meta-icon { font-size: 16px; }
+    .code-text {
+      font-family: "Courier New", monospace;
+      font-size: 16px; letter-spacing: 4px; color: #64ffda; font-weight: 700;
+    }
+
+    .ended-box {
+      background: rgba(255,82,82,.1); border: 1px solid rgba(255,82,82,.3);
+      border-radius: 12px; padding: 14px 18px;
+      color: #ff8a80; font-size: 14px; line-height: 1.5;
+    }
+
+    .btn-primary {
+      width: 100%; padding: 16px;
+      background: linear-gradient(135deg, #00bfa5, #00897b);
+      color: #fff; font-size: 16px; font-weight: 700;
+      border: none; border-radius: 14px; cursor: pointer;
+      transition: transform .15s, box-shadow .15s;
+      box-shadow: 0 4px 20px rgba(0,191,165,.35);
+    }
+    .btn-primary:hover  { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(0,191,165,.45); }
+    .btn-primary:active { transform: translateY(0); }
+
+    .hint { font-size: 12px; color: rgba(255,255,255,.4); }
+    .hint a { color: #64ffda; text-decoration: none; }
+    .hint a:hover { text-decoration: underline; }
+
+    /* Error */
+    #error {
+      display: none; flex-direction: column; align-items: center; gap: 16px;
+      background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12);
+      border-radius: 20px; padding: 32px 24px; text-align: center;
+    }
+    #error .err-icon { font-size: 48px; }
+    #error-msg { color: rgba(255,255,255,.7); font-size: 14px; line-height: 1.5; }
+
+    /* Footer */
+    .footer { text-align: center; margin-top: 20px; font-size: 11px; color: rgba(255,255,255,.25); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <div class="logo-text">🧠 Quiz<span>Aura</span></div>
+    </div>
+
+    <div id="loading">
+      <div class="spinner"></div>
+      <span>Loading quiz…</span>
+    </div>
+
+    <div id="card"></div>
+
+    <div id="error">
+      <div class="err-icon">😕</div>
+      <p id="error-msg">Something went wrong.</p>
+    </div>
+
+    <div class="footer">QuizAura · Learn. Compete. Win.</div>
+  </div>
+</body>
+</html>
