@@ -573,3 +573,4 @@ class _ArcPainter extends CustomPainter {
   @override
   bool shouldRepaint(_ArcPainter o) => false;
 }
+  
