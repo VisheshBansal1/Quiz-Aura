@@ -52,7 +52,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyBFBxF2dLRrx4qKiYnKxQ9ZEKOuOIfQCL0',
-    appId: '1:296193820246:android:b026b4f3edd417126b1df7',
+    appId: '1:296193820246:android:7dc505f6302f86956b1df7',
     messagingSenderId: '296193820246',
     projectId: 'quiz-sphere-3ec4d',
     storageBucket: 'quiz-sphere-3ec4d.firebasestorage.app',
@@ -64,6 +64,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '296193820246',
     projectId: 'quiz-sphere-3ec4d',
     storageBucket: 'quiz-sphere-3ec4d.firebasestorage.app',
+    androidClientId: '296193820246-2vt14vsae5ovm6uj306h1gu4ft1ss2eb.apps.googleusercontent.com',
+    iosClientId: '296193820246-1uc002tjnqfhb2a3i532fdchp1fd7tla.apps.googleusercontent.com',
     iosBundleId: 'com.example.quizApp',
   );
 
@@ -73,16 +75,19 @@ class DefaultFirebaseOptions {
     messagingSenderId: '296193820246',
     projectId: 'quiz-sphere-3ec4d',
     storageBucket: 'quiz-sphere-3ec4d.firebasestorage.app',
+    androidClientId: '296193820246-2vt14vsae5ovm6uj306h1gu4ft1ss2eb.apps.googleusercontent.com',
+    iosClientId: '296193820246-1uc002tjnqfhb2a3i532fdchp1fd7tla.apps.googleusercontent.com',
     iosBundleId: 'com.example.quizApp',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyAXRZpN-am5AGlAMcfH6JJ9QuWK1LI8WJ8',
-    appId: '1:296193820246:web:cf89ba051f19d3da6b1df7',
+    apiKey: 'AIzaSyAsg13EZyk3IMCmitcDN6nXw7draThCUHE',
+    appId: '1:296193820246:web:e9a8bf569cde515f6b1df7',
     messagingSenderId: '296193820246',
     projectId: 'quiz-sphere-3ec4d',
     authDomain: 'quiz-sphere-3ec4d.firebaseapp.com',
     storageBucket: 'quiz-sphere-3ec4d.firebasestorage.app',
-    measurementId: 'G-2CYKGY4EZ3',
+    measurementId: 'G-X967DMXQCM',
   );
+
 }

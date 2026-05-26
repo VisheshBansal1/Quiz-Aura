@@ -19,12 +19,19 @@
 //   4. AuthService crash after timeout:
 //      All Firebase fields in AuthService are `late` — they are only
 //      constructed when a login method is called, not on construction.
+//
+//   5. Named routes added:
+//      '/privacy' → PrivacyPolicyScreen
+//      '/terms'   → TermsConditionsScreen
 // ============================================================
 
 import 'package:QuizSphere/login/login_screen.dart';
+import 'package:QuizSphere/login/terms_and_condition/privacy_policy.dart';
+import 'package:QuizSphere/login/terms_and_condition/terms_condition_screen.dart';
 import 'package:QuizSphere/quizes/admin/screens/admin_daily_quiz_screen.dart';
 import 'package:QuizSphere/quizes/home/home_screen.dart';
 import 'package:QuizSphere/quizes/home/onboarding_screen.dart';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -47,24 +54,12 @@ Future<void> main() async {
   }
 
   // ── Firebase init ──────────────────────────────────────────────────────────
-  // On web, index.html pre-initialises the Firebase JS SDK before Flutter
-  // boots, so Dart's initializeApp() gets a 'duplicate-app' error — safe
-  // to ignore. Any other error is logged but not fatal so the app can still
-  // reach LoginScreen and show an appropriate message.
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
-    ).timeout(
-      const Duration(seconds: 10),
-      onTimeout: () {
-        debugPrint('[Firebase] initializeApp timed out — continuing anyway.');
-        return Future.value();
-      },
     );
   } catch (e) {
-    if (!e.toString().contains('duplicate-app')) {
-      debugPrint('[Firebase] initializeApp error: $e');
-    }
+    debugPrint('[Firebase Init Error] $e');
   }
 
   // ── FCM (native only) ─────────────────────────────────────────────────────
@@ -80,6 +75,28 @@ Future<void> main() async {
     await DeepLinkHandler.init();
   }
 
+  // ── Web: restore persisted auth state BEFORE painting the first frame ─────
+  // On web, authStateChanges() emits null first while Firebase reads the
+  // session from IndexedDB/localStorage.  If we call runApp() before that
+  // first emission arrives, AuthWrapper sees null → routes to LoginScreen →
+  // the 8-second timeout fires and removes the StreamBuilder from the tree →
+  // when the real User arrives later nobody is listening → user is stuck on
+  // the login page despite being authenticated.
+  //
+  // Awaiting `.first` here blocks for up to 10 s; in practice Firebase
+  // resolves in < 200 ms.  After this line, FirebaseAuth.instance.currentUser
+  // is populated and AuthWrapper's StreamBuilder will emit the correct value
+  // on its very first event.
+  if (kIsWeb) {
+    try {
+      await FirebaseAuth.instance.authStateChanges().first.timeout(
+        const Duration(seconds: 10),
+      );
+    } catch (e) {
+      debugPrint('[Web auth restore] timed out or errored: $e');
+    }
+  }
+
   runApp(const ProviderScope(child: QuizApp()));
 }
 
@@ -93,6 +110,13 @@ class QuizApp extends StatelessWidget {
       navigatorKey: DeepLinkHandler.navigatorKey,
       debugShowCheckedModeBanner: false,
       title: 'QuizAura',
+
+      // ── Named routes ──────────────────────────────────────────────────────
+      routes: {
+        '/privacy': (_) => const PrivacyPolicyScreen(),
+        '/terms': (_) => const TermsConditionsScreen(),
+      },
+
       theme: ThemeData(
         useMaterial3: true,
         colorSchemeSeed: Colors.teal,
@@ -123,14 +147,6 @@ class QuizApp extends StatelessWidget {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AuthWrapper — routes to LoginScreen or HomeScreen based on auth state.
-//
-// Defence 1: _authStream initialised in initState() inside try/catch.
-//   If FirebaseAuth.instance throws synchronously (Firebase not ready),
-//   we catch it and set _timedOut = true → LoginScreen immediately.
-//
-// Defence 2: 8-second timeout.
-//   If authStateChanges() hangs without emitting (domain not authorised,
-//   network issue, etc.), the timer fires and shows LoginScreen.
 // ─────────────────────────────────────────────────────────────────────────────
 class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
@@ -143,11 +159,17 @@ class _AuthWrapperState extends State<AuthWrapper> {
   bool _timedOut = false;
   Stream<User?>? _authStream;
 
+  // True once the stream delivers its first event (User or null).
+  // The 8-second timeout must NOT fire after this point — doing so would
+  // remove the StreamBuilder from the tree and cause us to miss subsequent
+  // Firebase emissions (e.g. the real User arriving after an initial null).
+  bool _streamEmitted = false;
+
   @override
   void initState() {
     super.initState();
 
-    // Defence 1
+    // Defence 1 — synchronous FirebaseAuth throw
     try {
       _authStream = FirebaseAuth.instance.authStateChanges().handleError((
         Object error,
@@ -166,10 +188,15 @@ class _AuthWrapperState extends State<AuthWrapper> {
       });
     }
 
-    // Defence 2
+    // Defence 2 — 8-second timeout.
+    // Only triggers if the stream has NEVER emitted.  This prevents the
+    // timeout from racing with a valid (but slow) auth event and destroying
+    // the StreamBuilder before Firebase can deliver the real User.
     Future.delayed(const Duration(seconds: 8), () {
-      if (mounted && !_timedOut) {
-        debugPrint('[AuthWrapper] Timed out after 8s → LoginScreen');
+      if (mounted && !_streamEmitted) {
+        debugPrint(
+          '[AuthWrapper] Timed out after 8s (stream never emitted) → LoginScreen',
+        );
         setState(() => _timedOut = true);
       }
     });
@@ -185,6 +212,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
       stream: _authStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.waiting) {
+          _streamEmitted = true; // stream is live — disable the timeout guard
           return _resolve(snapshot);
         }
         if (_timedOut) return const LoginScreen();
@@ -573,4 +601,3 @@ class _ArcPainter extends CustomPainter {
   @override
   bool shouldRepaint(_ArcPainter o) => false;
 }
-  

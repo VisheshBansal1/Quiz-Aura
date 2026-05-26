@@ -1,8 +1,17 @@
 // ============================================================
 // FILE: lib/features/tournament/screens/tournament_detail_screen.dart
+//
+// RESPONSIVE LAYOUT:
+//   • Mobile  (< 700 px) — original single-column scroll
+//   • Web/Tablet (≥ 700 px) — two-column:
+//       LEFT  : hero card (fixed 360 px, scrollable)
+//       RIGHT : tabs + tab-content (fills remaining width)
+//
+// Everything else (logic, services, widgets) is unchanged.
 // ============================================================
 
 import 'package:flutter/material.dart';
+// import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
@@ -14,6 +23,9 @@ import 'tournament_quiz_bridge_screen.dart';
 import 'admin_advance_round_screen.dart';
 import 'tournament_answer_review_screen.dart';
 import '../../../core/services/quiz_share_service.dart';
+
+// ─── breakpoint ──────────────────────────────────────────────────────────────
+const double _kWebBreak = 700;
 
 class TournamentDetailScreen extends StatefulWidget {
   final TournamentModel tournament;
@@ -33,9 +45,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen>
   bool get _isAdmin =>
       FirebaseAuth.instance.currentUser?.email == 'admin741@gmail.com';
 
-  /// Client-side effective status (includes endAt check).
   TournamentStatus get _effectiveStatus => widget.tournament.effectiveStatus;
-
   bool get _isEnded =>
       _effectiveStatus == TournamentStatus.finished ||
       _effectiveStatus == TournamentStatus.cancelled;
@@ -78,7 +88,7 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen>
         tournamentId: widget.tournament.id,
       );
       await _checkRegistration();
-      _snack('Registered! You\'re in 🎉', success: true);
+      _snack("Registered! You're in 🎉", success: true);
     } catch (e) {
       _snack(e.toString().replaceFirst('Exception: ', ''));
     } finally {
@@ -96,49 +106,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen>
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final t = widget.tournament;
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          Container(
-            decoration: const BoxDecoration(gradient: AppColors.mainGradient),
-          ),
-          SafeArea(
-            child: Column(
-              children: [
-                _buildAppBar(t),
-                const SizedBox(height: 16),
-                _buildHeroCard(t),
-                const SizedBox(height: 16),
-                _buildTabs(),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabs,
-                    children: [
-                      _RoundsTab(
-                        tournament: t,
-                        uid: _uid,
-                        isRegistered: _isRegistered,
-                        tournamentEnded: _isEnded,
-                        onPlayRound: (round) => _launchRound(round),
-                      ),
-                      _ParticipantsTab(tournamentId: t.id, myUid: _uid),
-                      _LeaderboardTab(tournamentId: t.id, myUid: _uid),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _launchRound(TournamentRound round) {
     Navigator.push(
       context,
@@ -151,7 +118,36 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen>
     ).then((_) => _checkRegistration());
   }
 
-  Widget _buildAppBar(TournamentModel t) {
+  // ── MAIN BUILD ─────────────────────────────────────────────────────────────
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          // background gradient
+          const DecoratedBox(
+            decoration: BoxDecoration(gradient: AppColors.mainGradient),
+            child: SizedBox.expand(),
+          ),
+          SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth >= _kWebBreak;
+                return isWide
+                    ? _WideLayout(state: this, constraints: constraints)
+                    : _NarrowLayout(state: this);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── SHARED: App-bar row ────────────────────────────────────────────────────
+  Widget buildAppBar() {
+    final t = widget.tournament;
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 12, 16, 0),
       child: Row(
@@ -172,7 +168,6 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen>
               ),
             ),
           ),
-          // ── ADDED: Share button ────────────────────────────
           IconButton(
             icon: const Icon(Icons.share_outlined, color: Colors.white70),
             tooltip: 'Share Tournament',
@@ -201,52 +196,52 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen>
     );
   }
 
-  Widget _buildHeroCard(TournamentModel t) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: GlassCard(
-        elevation: 8,
-        borderRadius: 24,
-        child: Column(
-          children: [
-            const Text('🏆', style: TextStyle(fontSize: 48)),
-            const SizedBox(height: 12),
-            Text(
-              t.title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            if (t.description.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                t.description,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white60, fontSize: 13),
-              ),
-            ],
-            const SizedBox(height: 16),
-            _InfoGrid(tournament: t, effectiveStatus: _effectiveStatus),
-            const SizedBox(height: 16),
-            _RegisterButton(
-              tournament: t,
-              effectiveStatus: _effectiveStatus,
-              isRegistered: _isRegistered,
-              isLoading: _registering,
-              onRegister: _register,
-            ),
-          ],
+  // ── SHARED: Hero card content ─────────────────────────────────────────────
+  Widget buildHeroContent({bool compact = false}) {
+    final t = widget.tournament;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          '🏆',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: compact ? 36 : 48),
         ),
-      ),
+        SizedBox(height: compact ? 8 : 12),
+        Text(
+          t.title,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: compact ? 16 : 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        if (t.description.isNotEmpty) ...[
+          SizedBox(height: compact ? 6 : 8),
+          Text(
+            t.description,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white60, fontSize: 13),
+          ),
+        ],
+        SizedBox(height: compact ? 12 : 16),
+        _InfoGrid(tournament: t, effectiveStatus: _effectiveStatus),
+        SizedBox(height: compact ? 12 : 16),
+        _RegisterButton(
+          tournament: t,
+          effectiveStatus: _effectiveStatus,
+          isRegistered: _isRegistered,
+          isLoading: _registering,
+          onRegister: _register,
+        ),
+      ],
     );
   }
 
-  Widget _buildTabs() {
+  // ── SHARED: Tab bar ───────────────────────────────────────────────────────
+  Widget buildTabBar() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
@@ -265,6 +260,129 @@ class _TournamentDetailScreenState extends State<TournamentDetailScreen>
           Tab(text: 'Participants'),
           Tab(text: 'Leaderboard'),
         ],
+      ),
+    );
+  }
+
+  // ── SHARED: Tab view ──────────────────────────────────────────────────────
+  Widget buildTabView() {
+    final t = widget.tournament;
+    return TabBarView(
+      controller: _tabs,
+      children: [
+        _RoundsTab(
+          tournament: t,
+          uid: _uid,
+          isRegistered: _isRegistered,
+          tournamentEnded: _isEnded,
+          onPlayRound: _launchRound,
+        ),
+        _ParticipantsTab(tournamentId: t.id, myUid: _uid),
+        _LeaderboardTab(tournamentId: t.id, myUid: _uid),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NARROW LAYOUT  (mobile — unchanged feel)
+// ─────────────────────────────────────────────────────────────────────────────
+class _NarrowLayout extends StatelessWidget {
+  final _TournamentDetailScreenState state;
+  const _NarrowLayout({required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        state.buildAppBar(),
+        const SizedBox(height: 16),
+        // hero card
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: GlassCard(
+            elevation: 8,
+            borderRadius: 24,
+            child: state.buildHeroContent(),
+          ),
+        ),
+        const SizedBox(height: 16),
+        // tab bar
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: state.buildTabBar(),
+        ),
+        const SizedBox(height: 8),
+        // tab content
+        Expanded(child: state.buildTabView()),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WIDE LAYOUT  (web / tablet — two-column)
+// ─────────────────────────────────────────────────────────────────────────────
+class _WideLayout extends StatelessWidget {
+  final _TournamentDetailScreenState state;
+  final BoxConstraints constraints;
+  const _WideLayout({required this.state, required this.constraints});
+
+  @override
+  Widget build(BuildContext context) {
+    // Clamp total content width so it never gets absurdly wide on 4K displays.
+    final totalWidth = constraints.maxWidth.clamp(0.0, 1280.0);
+    // Left sidebar is 340 px on moderate screens, slightly wider on very large.
+    final sideWidth = (totalWidth * 0.28).clamp(300.0, 380.0);
+
+    return Center(
+      child: SizedBox(
+        width: totalWidth,
+        child: Column(
+          children: [
+            // ── Top app-bar ───────────────────────────────────────────────
+            state.buildAppBar(),
+            const SizedBox(height: 16),
+
+            // ── Two-column body ───────────────────────────────────────────
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── LEFT: hero card (fixed width, independently scrollable)
+                    SizedBox(
+                      width: sideWidth,
+                      child: SingleChildScrollView(
+                        child: GlassCard(
+                          elevation: 8,
+                          borderRadius: 24,
+                          child: state.buildHeroContent(compact: true),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 20),
+
+                    // ── RIGHT: tabs + content (fills remaining space)
+                    Expanded(
+                      child: Column(
+                        children: [
+                          // tab bar — full width of right panel
+                          state.buildTabBar(),
+                          const SizedBox(height: 12),
+                          // tab content — scrolls independently
+                          Expanded(child: state.buildTabView()),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -319,17 +437,43 @@ class _RoundsTab extends StatelessWidget {
             ),
           );
         }
-        return ListView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          itemCount: rounds.length,
-          itemBuilder: (_, i) => _RoundCard(
-            round: rounds[i],
-            tournament: tournament,
-            uid: uid,
-            isRegistered: isRegistered,
-            tournamentEnded: tournamentEnded,
-            onPlay: () => onPlayRound(rounds[i]),
-          ),
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            // On wide screens show rounds in a 2-column grid.
+            final useGrid = constraints.maxWidth >= 560;
+            if (useGrid) {
+              return GridView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 1.45,
+                ),
+                itemCount: rounds.length,
+                itemBuilder: (_, i) => _RoundCard(
+                  round: rounds[i],
+                  tournament: tournament,
+                  uid: uid,
+                  isRegistered: isRegistered,
+                  tournamentEnded: tournamentEnded,
+                  onPlay: () => onPlayRound(rounds[i]),
+                ),
+              );
+            }
+            return ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              itemCount: rounds.length,
+              itemBuilder: (_, i) => _RoundCard(
+                round: rounds[i],
+                tournament: tournament,
+                uid: uid,
+                isRegistered: isRegistered,
+                tournamentEnded: tournamentEnded,
+                onPlay: () => onPlayRound(rounds[i]),
+              ),
+            );
+          },
         );
       },
     );
@@ -465,9 +609,7 @@ class _RoundCardState extends State<_RoundCard> {
                 ),
             ],
           ),
-
           const SizedBox(height: 10),
-
           Row(
             children: [
               const Icon(
@@ -493,9 +635,7 @@ class _RoundCardState extends State<_RoundCard> {
               ),
             ],
           ),
-
           const SizedBox(height: 14),
-
           _loadingState
               ? const SizedBox(
                   height: 44,
@@ -517,7 +657,6 @@ class _RoundCardState extends State<_RoundCard> {
   }
 
   Widget _buildActionButton() {
-    // If the whole tournament has ended, all rounds show as ended regardless.
     if (widget.tournamentEnded && _state != RoundPlayState.completed) {
       return _statusBox(
         color: Colors.grey,
@@ -604,8 +743,7 @@ class _RoundCardState extends State<_RoundCard> {
         );
 
       case RoundPlayState.upcoming:
-        final now = DateTime.now();
-        final diff = widget.round.startAt.difference(now);
+        final diff = widget.round.startAt.difference(DateTime.now());
         final countdown = diff.inHours > 24
             ? '${diff.inDays}d remaining'
             : diff.inHours > 0
@@ -681,8 +819,7 @@ class _RoundCardState extends State<_RoundCard> {
 
 class _RoundBadge extends StatelessWidget {
   final int number;
-  final bool isLive;
-  final bool ended;
+  final bool isLive, ended;
   const _RoundBadge({
     required this.number,
     required this.isLive,
@@ -781,7 +918,6 @@ class _InfoGrid extends StatelessWidget {
         ),
         if (tournament.prizeDescription.isNotEmpty)
           _InfoTile(icon: '🎁', label: tournament.prizeDescription),
-        // Show end time if available
         if (tournament.endAt != null)
           _InfoTile(
             icon: isEnded ? '🏁' : '⏰',
@@ -842,7 +978,6 @@ class _RegisterButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ── Tournament has ended (finished / cancelled) ──────────────────────
     if (effectiveStatus == TournamentStatus.finished) {
       return _statusBox(
         color: Colors.grey,
@@ -857,8 +992,6 @@ class _RegisterButton extends StatelessWidget {
         icon: Icons.cancel_outlined,
       );
     }
-
-    // ── Active — player is in ────────────────────────────────────────────
     if (effectiveStatus == TournamentStatus.active && isRegistered) {
       return _statusBox(
         color: Colors.teal,
@@ -866,8 +999,6 @@ class _RegisterButton extends StatelessWidget {
         icon: Icons.sports_esports,
       );
     }
-
-    // ── Active — not registered ──────────────────────────────────────────
     if (effectiveStatus == TournamentStatus.active) {
       return _statusBox(
         color: Colors.orange,
@@ -876,7 +1007,6 @@ class _RegisterButton extends StatelessWidget {
       );
     }
 
-    // ── Upcoming ─────────────────────────────────────────────────────────
     final isFull =
         tournament.maxParticipants > 0 &&
         tournament.participantCount >= tournament.maxParticipants;
@@ -958,25 +1088,23 @@ class _RegisterButton extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LEADERBOARD TAB (unchanged logic)
+// LEADERBOARD TAB
 // ─────────────────────────────────────────────────────────────────────────────
 class _LeaderboardTab extends StatelessWidget {
   final String tournamentId, myUid;
   const _LeaderboardTab({required this.tournamentId, required this.myUid});
 
-  static int _totalScore(TournamentParticipant p) {
-    return p.roundScores.fold<int>(0, (sum, s) {
-      final v = s['score'];
-      return sum + (v is int ? v : (v as num?)?.toInt() ?? 0);
-    });
-  }
+  static int _totalScore(TournamentParticipant p) =>
+      p.roundScores.fold<int>(0, (sum, s) {
+        final v = s['score'];
+        return sum + (v is int ? v : (v as num?)?.toInt() ?? 0);
+      });
 
-  static int _totalQuestions(TournamentParticipant p) {
-    return p.roundScores.fold<int>(0, (sum, s) {
-      final v = s['total'];
-      return sum + (v is int ? v : (v as num?)?.toInt() ?? 0);
-    });
-  }
+  static int _totalQuestions(TournamentParticipant p) =>
+      p.roundScores.fold<int>(0, (sum, s) {
+        final v = s['total'];
+        return sum + (v is int ? v : (v as num?)?.toInt() ?? 0);
+      });
 
   static int _latestRound(TournamentParticipant p) {
     if (p.roundScores.isEmpty) return 0;
@@ -997,7 +1125,6 @@ class _LeaderboardTab extends StatelessWidget {
         }
 
         final all = snapshot.data ?? [];
-
         if (all.isEmpty) {
           return const Center(
             child: Text(
@@ -1011,7 +1138,6 @@ class _LeaderboardTab extends StatelessWidget {
           ..sort((a, b) => _totalScore(b).compareTo(_totalScore(a)));
         final eliminated = all.where((p) => p.eliminated).toList()
           ..sort((a, b) => _totalScore(b).compareTo(_totalScore(a)));
-
         final ranked = [...active, ...eliminated];
 
         return ListView.builder(
@@ -1019,25 +1145,18 @@ class _LeaderboardTab extends StatelessWidget {
           itemCount: ranked.length + 1,
           itemBuilder: (_, i) {
             if (i == 0) return _LeaderboardHeader();
-
             final p = ranked[i - 1];
-            final rank = i;
-            final isMe = p.uid == myUid;
             final score = _totalScore(p);
             final totalQ = _totalQuestions(p);
-            final pct = totalQ > 0 ? score / totalQ * 100 : 0.0;
-            final roundsPlayed = p.roundScores.length;
-            final latestRound = _latestRound(p);
-
             return _LeaderboardRow(
-              rank: rank,
+              rank: i,
               name: p.name,
               score: score,
               totalQuestions: totalQ,
-              percentage: pct,
-              roundsPlayed: roundsPlayed,
-              latestRound: latestRound,
-              isMe: isMe,
+              percentage: totalQ > 0 ? score / totalQ * 100 : 0.0,
+              roundsPlayed: p.roundScores.length,
+              latestRound: _latestRound(p),
+              isMe: p.uid == myUid,
               isEliminated: p.eliminated,
             );
           },
@@ -1098,13 +1217,10 @@ class _LeaderboardHeader extends StatelessWidget {
 class _LeaderboardRow extends StatelessWidget {
   final int rank;
   final String name;
-  final int score;
-  final int totalQuestions;
+  final int score, totalQuestions;
   final double percentage;
-  final int roundsPlayed;
-  final int latestRound;
-  final bool isMe;
-  final bool isEliminated;
+  final int roundsPlayed, latestRound;
+  final bool isMe, isEliminated;
 
   const _LeaderboardRow({
     required this.rank,
@@ -1199,24 +1315,18 @@ class _LeaderboardRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        isMe ? '$name (You)' : name,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: isMe
-                              ? Colors.tealAccent
-                              : isEliminated
-                              ? Colors.white38
-                              : Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ],
+                Text(
+                  isMe ? '$name (You)' : name,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: isMe
+                        ? Colors.tealAccent
+                        : isEliminated
+                        ? Colors.white38
+                        : Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -1258,7 +1368,7 @@ class _LeaderboardRow extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PARTICIPANTS TAB (unchanged)
+// PARTICIPANTS TAB
 // ─────────────────────────────────────────────────────────────────────────────
 class _ParticipantsTab extends StatelessWidget {
   final String tournamentId, myUid;

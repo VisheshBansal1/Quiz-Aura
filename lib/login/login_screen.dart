@@ -1,9 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:QuizSphere/quizes/home/onboarding_screen.dart';
 import 'package:QuizSphere/quizes/admin/screens/admin_daily_quiz_screen.dart';
 
 import 'auth/auth_service.dart';
+
+// ── Named Route constants ────────────────────────────────────────────────────
+// Register these in your MaterialApp routes:
+//
+//   routes: {
+//     '/login':   (_) => const LoginScreen(),
+//     '/privacy': (_) => const PrivacyPolicyScreen(),
+//     '/terms':   (_) => const TermsConditionsScreen(),
+//   },
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -82,7 +92,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _error(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
@@ -111,7 +122,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(24),
                   color: Colors.white.withOpacity(0.12),
-                  border: Border.all(color: Colors.white.withOpacity(0.25)),
+                  border:
+                      Border.all(color: Colors.white.withOpacity(0.25)),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.25),
@@ -152,7 +164,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           color: Colors.white70,
                         ),
                         hintText: "Email",
-                        hintStyle: const TextStyle(color: Colors.white60),
+                        hintStyle:
+                            const TextStyle(color: Colors.white60),
                         filled: true,
                         fillColor: Colors.white.withOpacity(0.15),
                         border: OutlineInputBorder(
@@ -175,15 +188,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           color: Colors.white70,
                         ),
                         hintText: "Password",
-                        hintStyle: const TextStyle(color: Colors.white60),
+                        hintStyle:
+                            const TextStyle(color: Colors.white60),
                         filled: true,
                         fillColor: Colors.white.withOpacity(0.15),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(16),
                           borderSide: BorderSide.none,
                         ),
-
-                        // 👇 THIS IS THE MAIN PART (EYE ICON)
                         suffixIcon: IconButton(
                           icon: Icon(
                             isPasswordVisible
@@ -225,6 +237,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
 
+                    // ===== Agreement Text =====
+                    const SizedBox(height: 14),
+                    _AgreementText(),
+
                     const SizedBox(height: 16),
 
                     // ===== Divider =====
@@ -250,14 +266,16 @@ class _LoginScreenState extends State<LoginScreen> {
                       height: 52,
                       child: OutlinedButton.icon(
                         onPressed: loading ? null : _loginGoogle,
-                        icon: const Icon(Icons.g_mobiledata, size: 28),
+                        icon:
+                            const Icon(Icons.g_mobiledata, size: 28),
                         label: const Text(
                           "Continue with Google",
                           style: TextStyle(fontSize: 15),
                         ),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.white,
-                          side: const BorderSide(color: Colors.white54),
+                          side: const BorderSide(
+                              color: Colors.white54),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
@@ -275,9 +293,58 @@ class _LoginScreenState extends State<LoginScreen> {
             Container(
               color: Colors.black.withOpacity(0.4),
               child: const Center(
-                child: CircularProgressIndicator(color: Colors.white),
+                child: CircularProgressIndicator(
+                    color: Colors.white),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Agreement Text Widget ────────────────────────────────────────────────────
+
+class _AgreementText extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return RichText(
+      textAlign: TextAlign.center,
+      text: TextSpan(
+        style: const TextStyle(
+          color: Colors.white54,
+          fontSize: 12,
+          height: 1.6,
+        ),
+        children: [
+          const TextSpan(text: 'By continuing, you agree to QuizAura\n'),
+          // ── Terms & Conditions link ──
+          TextSpan(
+            text: 'Terms & Conditions',
+            style: const TextStyle(
+              color: Color(0xFFB3AEFF),
+              fontWeight: FontWeight.w600,
+              decoration: TextDecoration.underline,
+              decorationColor: Color(0xFFB3AEFF),
+            ),
+            recognizer: TapGestureRecognizer()
+              ..onTap = () =>
+                  Navigator.of(context).pushNamed('/terms'),
+          ),
+          const TextSpan(text: ' and '),
+          // ── Privacy Policy link ──
+          TextSpan(
+            text: 'Privacy Policy',
+            style: const TextStyle(
+              color: Color(0xFFB3AEFF),
+              fontWeight: FontWeight.w600,
+              decoration: TextDecoration.underline,
+              decorationColor: Color(0xFFB3AEFF),
+            ),
+            recognizer: TapGestureRecognizer()
+              ..onTap = () =>
+                  Navigator.of(context).pushNamed('/privacy'),
+          ),
         ],
       ),
     );
