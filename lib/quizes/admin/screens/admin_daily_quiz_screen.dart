@@ -21,6 +21,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/groq_ai_service.dart';
+import 'package:QuizSphere/core/services/ai_quiz_access_service.dart';
 
 // ─── palette ────────────────────────────────────────────────────────────────
 const _bg = Color(0xFF0A0D14);
@@ -257,6 +258,15 @@ class _AdminDailyQuizManagerScreenState
 
   Future<void> _generateWithAI() async {
     if (_generating) return;
+
+    // AI Quiz Generation is mobile-only. The button that calls this is
+    // already gated (see _buildAIGenerateButton), but this check is a
+    // defense-in-depth backstop in case _generateWithAI is ever invoked
+    // from another path on web.
+    if (AiQuizAccessService.isBlockedOnWeb) {
+      _showSnack(AiQuizAccessService.blockedMessage, error: true);
+      return;
+    }
 
     // For Mix, pick across all categories; otherwise use selected
     final List<String> topicsToUse;
@@ -971,10 +981,13 @@ class _AdminDailyQuizManagerScreenState
 
   Widget _buildAIGenerateButton() {
     final cat = _categories[_selectedCategoryIndex];
+    final blocked = AiQuizAccessService.isBlockedOnWeb;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
       child: GestureDetector(
-        onTap: _generating ? null : _generateWithAI,
+        onTap: _generating
+            ? null
+            : () => AiQuizAccessService.guard(context, _generateWithAI),
         child: AnimatedBuilder(
           animation: _pulseCtrl,
           builder: (_, __) => Container(
@@ -1010,8 +1023,10 @@ class _AdminDailyQuizManagerScreenState
                     ),
                   )
                 else
-                  const Icon(
-                    Icons.auto_awesome_rounded,
+                  Icon(
+                    blocked
+                        ? AiQuizAccessService.webIcon
+                        : Icons.auto_awesome_rounded,
                     color: Colors.white,
                     size: 20,
                   ),
@@ -1019,7 +1034,9 @@ class _AdminDailyQuizManagerScreenState
                 Text(
                   _generating
                       ? 'Generating…'
-                      : 'Generate 10 AI Questions  (${cat.label})',
+                      : blocked
+                          ? AiQuizAccessService.webButtonLabel
+                          : 'Generate 10 AI Questions  (${cat.label})',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 15,
@@ -1302,9 +1319,11 @@ class _AdminDailyQuizManagerScreenState
               ),
             ),
             const SizedBox(height: 4),
-            const Text(
-              'Tap "Generate" above or add manually',
-              style: TextStyle(color: _textSecondary, fontSize: 12),
+            Text(
+              AiQuizAccessService.isBlockedOnWeb
+                  ? 'Add manually — AI generation needs the mobile app'
+                  : 'Tap "Generate" above or add manually',
+              style: const TextStyle(color: _textSecondary, fontSize: 12),
             ),
           ],
         ),

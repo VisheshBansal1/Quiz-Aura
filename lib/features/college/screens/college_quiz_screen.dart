@@ -11,6 +11,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../quizes/admin/services/Admin_quiz_service.dart';
 import '../../../quizes/admin/screens/add_question_screen.dart';
 import '../../../quizes/admin/screens/ai_generate_questions_screen.dart';
+import '../../../core/services/ai_quiz_access_service.dart';
 
 class CollegeQuizScreen extends StatefulWidget {
   final String collegeId;
@@ -558,16 +559,20 @@ class _CollegeQuizList extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       _ActionBtn(
-                        icon: Icons.auto_awesome,
-                        label: 'AI Generate',
+                        icon: AiQuizAccessService.buttonIcon(
+                            Icons.auto_awesome),
+                        label: AiQuizAccessService.buttonLabel(
+                            'AI Generate'),
                         onTap: isActive
-                            ? () => Navigator.push(
+                            ? () => AiQuizAccessService.guard(
                                 context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      AiGenerateQuestionsScreen(
-                                          quizId: doc.id),
-                                ))
+                                () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          AiGenerateQuestionsScreen(
+                                              quizId: doc.id),
+                                    )))
                             : null,
                       ),
                     ],

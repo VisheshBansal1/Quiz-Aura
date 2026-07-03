@@ -19,6 +19,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/groq_ai_service.dart';
 import '../services/Admin_quiz_service.dart';
+import 'package:QuizSphere/core/services/ai_quiz_access_service.dart';
 
 class AiGenerateQuestionsScreen extends ConsumerStatefulWidget {
   final String quizId;
@@ -62,6 +63,21 @@ class _AiGenerateQuestionsScreenState
   @override
   void initState() {
     super.initState();
+
+    // AI Quiz Generation is mobile-only. Every known entry point already
+    // stops navigation from reaching this screen on web (see college quiz
+    // screen, admin dashboard, and create-quiz screen). This is a
+    // defense-in-depth fallback in case it is ever reached directly —
+    // bail out immediately instead of showing any generation UI.
+    if (AiQuizAccessService.isBlockedOnWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        AiQuizAccessService.showBlockedMessage(context);
+        Navigator.of(context).pop();
+      });
+      return;
+    }
+
     try {
       groqAIService = GroqAIService();
     } catch (e) {
@@ -87,6 +103,11 @@ class _AiGenerateQuestionsScreenState
   // GENERATE — entry point when user taps the button
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> generate() async {
+    if (AiQuizAccessService.isBlockedOnWeb) {
+      AiQuizAccessService.showBlockedMessage(context);
+      return;
+    }
+
     if (_initError != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(_initError!), backgroundColor: Colors.redAccent),
@@ -154,6 +175,11 @@ class _AiGenerateQuestionsScreenState
   // REGENERATE SINGLE
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> regenerateOne(int index) async {
+    if (AiQuizAccessService.isBlockedOnWeb) {
+      AiQuizAccessService.showBlockedMessage(context);
+      return;
+    }
+
     if (_initError != null || topicTitle == null) return;
 
     try {
@@ -257,6 +283,14 @@ class _AiGenerateQuestionsScreenState
   // ─────────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    // Web fallback: initState() already scheduled a pop + message for this
+    // frame. Render an empty shell instead of the generation UI so no
+    // web user ever sees (or can interact with) the AI generation screen,
+    // even for a single frame.
+    if (AiQuizAccessService.isBlockedOnWeb) {
+      return const Scaffold(backgroundColor: Color(0xFF0F2027));
+    }
+
     // Determine the overlay message based on which stage we're in
     final String overlayMessage = _adLoading
         ? 'Loading ad…\nPlease wait a moment'

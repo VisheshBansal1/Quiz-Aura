@@ -17,6 +17,7 @@ import '../../../login/login_screen.dart';
 import 'create_quiz_screen.dart';
 import 'add_question_screen.dart';
 import 'ai_generate_questions_screen.dart';
+import '../../../core/services/ai_quiz_access_service.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -350,14 +351,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       ),
                       const SizedBox(width: 8),
                       _actionButton(
-                        icon: Icons.auto_awesome,
-                        label: 'AI',
+                        icon: AiQuizAccessService.buttonIcon(
+                            Icons.auto_awesome),
+                        label: AiQuizAccessService.buttonLabel('AI'),
                         enabled: isActive,
-                        onTap: () => Navigator.push(
+                        onTap: () => AiQuizAccessService.guard(
                           context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                AiGenerateQuestionsScreen(quizId: doc.id),
+                          () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  AiGenerateQuestionsScreen(quizId: doc.id),
+                            ),
                           ),
                         ),
                       ),
@@ -376,14 +381,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       ),
                       const SizedBox(width: 8),
                       _actionButton(
-                        icon: Icons.auto_awesome,
-                        label: 'AI',
+                        icon: AiQuizAccessService.buttonIcon(
+                            Icons.auto_awesome),
+                        label: AiQuizAccessService.buttonLabel('AI'),
                         enabled: isActive,
-                        onTap: () => Navigator.push(
+                        onTap: () => AiQuizAccessService.guard(
                           context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                AiGenerateQuestionsScreen(quizId: doc.id),
+                          () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  AiGenerateQuestionsScreen(quizId: doc.id),
+                            ),
                           ),
                         ),
                       ),

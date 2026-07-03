@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import 'package:QuizSphere/core/services/ai_quiz_access_service.dart';
+
 class GroqAIService {
   static const String _endpoint =
       "https://api.groq.com/openai/v1/chat/completions";
@@ -26,6 +28,14 @@ class GroqAIService {
     required String difficulty,
     int count = 5,
   }) async {
+    // AI Quiz Generation is mobile-only. Every known UI entry point already
+    // stops before reaching this call on web — this check is a final
+    // backstop so the actual Groq network call can never run on web, no
+    // matter which code path gets here.
+    if (AiQuizAccessService.isBlockedOnWeb) {
+      throw Exception(AiQuizAccessService.blockedMessage);
+    }
+
     if (_apiKey.isEmpty) {
       throw Exception(
         'AI API key (Quiz_API) is not configured.\n'

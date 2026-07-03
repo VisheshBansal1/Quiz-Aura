@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'add_question_screen.dart';
 import 'ai_generate_questions_screen.dart';
+import 'package:QuizSphere/core/services/ai_quiz_access_service.dart';
 
 class CreateQuizScreen extends StatefulWidget {
   const CreateQuizScreen({super.key});
@@ -329,14 +330,20 @@ class _CreateQuizScreenState extends State<CreateQuizScreen> {
                             const SizedBox(height: 10),
                             if (quizType != 'coding')
                               _actionButton(
-                                label: 'Generate MCQ with AI',
-                                icon: Icons.auto_awesome,
+                                label: AiQuizAccessService.buttonLabel(
+                                    'Generate MCQ with AI'),
+                                icon: AiQuizAccessService.buttonIcon(
+                                    Icons.auto_awesome),
                                 color: Colors.deepPurpleAccent,
-                                onTap: () => Navigator.push(
+                                onTap: () => AiQuizAccessService.guard(
                                   context,
-                                  MaterialPageRoute(
-                                    builder: (_) => AiGenerateQuestionsScreen(
-                                      quizId: quizId!,
+                                  () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          AiGenerateQuestionsScreen(
+                                        quizId: quizId!,
+                                      ),
                                     ),
                                   ),
                                 ),
