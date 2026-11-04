@@ -1,31 +1,15 @@
 {
-  "name": "quiz_app",
+  "name": "quizaura-daily-quiz-generator",
   "version": "1.0.0",
-  "description": "A new Flutter project.",
-  "main": "index.js",
-  "directories": {
-    "lib": "lib",
-    "test": "test"
-  },
+  "private": true,
+  "type": "module",
+  "description": "Generates the QuizAura daily quiz (10 AI questions, random topic) into Firestore every night at 12:00 AM IST. Runs free on GitHub Actions.",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "generate": "node generate-daily-quiz.mjs",
+    "test": "node selftest.mjs"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/VisheshBansal1/quiz_app.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/VisheshBansal1/quiz_app/issues"
-  },
-  "homepage": "https://github.com/VisheshBansal1/quiz_app#readme",
+  "engines": { "node": ">=20" },
   "dependencies": {
-    "axios": "^1.13.2",
-    "cors": "^2.8.5",
-    "express": "^5.2.1",
-    "firebase-admin": "^13.6.0"
+    "firebase-admin": "^12.7.0"
   }
 }
