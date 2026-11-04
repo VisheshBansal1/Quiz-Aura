@@ -7,50 +7,6 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:296193820246:android:b026b4f3edd417126b1df7",
-        "android_client_info": {
-          "package_name": "com.example.quiz_app"
-        }
-      },
-      "oauth_client": [
-        {
-          "client_id": "296193820246-asgdh130ehtoubjj134ksmrqhepps8oe.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.example.quiz_app",
-            "certificate_hash": "5aee9825c192320aa5f122c0b783b911020afe54"
-          }
-        },
-        {
-          "client_id": "296193820246-6bqlgd3ss35q0pgclm4c7jj538kq7e4a.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
-      "api_key": [
-        {
-          "current_key": "AIzaSyBFBxF2dLRrx4qKiYnKxQ9ZEKOuOIfQCL0"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "296193820246-6bqlgd3ss35q0pgclm4c7jj538kq7e4a.apps.googleusercontent.com",
-              "client_type": 3
-            },
-            {
-              "client_id": "296193820246-1uc002tjnqfhb2a3i532fdchp1fd7tla.apps.googleusercontent.com",
-              "client_type": 2,
-              "ios_info": {
-                "bundle_id": "com.example.quizApp"
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "client_info": {
         "mobilesdk_app_id": "1:296193820246:android:7dc505f6302f86956b1df7",
         "android_client_info": {
           "package_name": "com.vavina.quizaura"
@@ -63,6 +19,14 @@
           "android_info": {
             "package_name": "com.vavina.quizaura",
             "certificate_hash": "cd0291e19149fdfb90c05f513b685dacfa1bc335"
+          }
+        },
+        {
+          "client_id": "296193820246-ks4b25ub06r2o6vlidb2e74kb8toilgs.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.vavina.quizaura",
+            "certificate_hash": "12305f56ca3bfbe345d199155a432dac9e108691"
           }
         },
         {

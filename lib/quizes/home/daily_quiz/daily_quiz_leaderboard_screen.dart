@@ -81,7 +81,7 @@ class DailyLeaderboardScreen extends StatelessWidget {
                 final userId = docs[index].id;
 
                 final String userName =
-                    data['userName'] ?? "Anonymous";
+                    data['userName'] ?? data['name'] ?? "Anonymous";
 
                 final int score = data['score'] ?? 0;
                 final int total = data['total'] ?? 0;

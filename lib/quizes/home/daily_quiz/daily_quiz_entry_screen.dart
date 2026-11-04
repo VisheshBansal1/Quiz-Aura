@@ -1,5 +1,9 @@
-import 'package:QuizSphere/quizes/home/leaderboard/quiz_leaderboard_screen.dart';
+import 'dart:async';
+
+import 'package:QuizSphere/quizes/home/daily_quiz/daily_quiz_clock.dart';
+import 'package:QuizSphere/quizes/home/daily_quiz/daily_quiz_leaderboard_screen.dart';
 import 'package:QuizSphere/quizes/home/quiz_attempt_screen.dart';
+import 'package:QuizSphere/quizes/home/quiz_result_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -65,65 +69,70 @@ class DailyQuizDetailScreen extends StatefulWidget {
 
 class _DailyQuizDetailScreenState extends State<DailyQuizDetailScreen> {
   Map<String, dynamic>? quizData;
+  Map<String, dynamic>? myAttempt;
   bool loading = true;
   bool alreadyPlayed = false;
   int playersToday = 0;
 
-  String getTodayQuizId() {
-    final now = DateTime.now().toUtc();
-    return "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-  }
+  /// Id of the quiz currently on screen (IST date). Re-evaluated every
+  /// second so the screen flips to the new quiz right after 12:00 AM.
+  String _quizId = DailyQuizClock.todayId();
+  Duration _untilNext = DailyQuizClock.untilNextMidnight();
+  Timer? _ticker;
 
   @override
   void initState() {
     super.initState();
     _loadQuiz();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _untilNext = DailyQuizClock.untilNextMidnight());
+
+      // Midnight passed while the screen was open -> load the new quiz.
+      if (_quizId != DailyQuizClock.todayId()) {
+        _loadQuiz();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadQuiz() async {
-    // FIX: All setState() calls guarded with !mounted to prevent
-    // "setState called after dispose" crashes.
+    final quizId = DailyQuizClock.todayId();
+    _quizId = quizId;
+
     try {
       final user = FirebaseAuth.instance.currentUser;
-      final quizId = getTodayQuizId();
 
       final quizRef = FirebaseFirestore.instance
           .collection('dailyQuizzes')
           .doc(quizId);
 
       final quizSnap = await quizRef.get();
+      if (!mounted) return;
 
-      if (!mounted) return; // FIX: guard after every await
+      Map<String, dynamic>? data = quizSnap.exists ? quizSnap.data() : null;
 
-      if (!quizSnap.exists) {
-        setState(() {
-          quizData = null;
-          loading = false;
-        });
-        return;
+      // Must be published and already live (the generator pre-creates
+      // tomorrow's quiz with publishAt = 12:00 AM IST).
+      if (data != null) {
+        final publishAtRaw = data['publishAt'];
+        final isLive =
+            data['isPublished'] == true &&
+            publishAtRaw is Timestamp &&
+            !DateTime.now().isBefore(publishAtRaw.toDate());
+        if (!isLive) data = null;
       }
 
-      final data = quizSnap.data()!;
-
-      // FIX: Null-safe Timestamp cast — if 'publishAt' is missing from
-      // Firestore the old force-cast `as Timestamp` threw a TypeError crash.
-      final publishAtRaw = data['publishAt'];
-      if (publishAtRaw == null || publishAtRaw is! Timestamp) {
-        // Missing/bad publishAt field — treat as unpublished.
-        if (!mounted) return;
+      if (data == null) {
         setState(() {
           quizData = null;
-          loading = false;
-        });
-        return;
-      }
-      final publishAt = publishAtRaw.toDate();
-      final now = DateTime.now();
-
-      if (data['isPublished'] != true || now.isBefore(publishAt)) {
-        if (!mounted) return;
-        setState(() {
-          quizData = null;
+          myAttempt = null;
+          alreadyPlayed = false;
           loading = false;
         });
         return;
@@ -131,45 +140,48 @@ class _DailyQuizDetailScreenState extends State<DailyQuizDetailScreen> {
 
       bool played = false;
       int count = 0;
+      Map<String, dynamic>? attempt;
 
       if (user != null) {
         final attemptSnap = await quizRef
             .collection('leaderboard')
             .doc(user.uid)
             .get();
-
-        final countSnap = await quizRef.collection('leaderboard').count().get();
-
         played = attemptSnap.exists;
-        count = countSnap.count ?? 0;
+
+        if (played) {
+          final a = await quizRef.collection('attempts').doc(user.uid).get();
+          attempt = a.data();
+        }
+
+        try {
+          final countSnap = await quizRef
+              .collection('leaderboard')
+              .count()
+              .get();
+          count = countSnap.count ?? 0;
+        } catch (_) {
+          // Player count is cosmetic — never block the screen on it.
+        }
       }
 
-      if (!mounted) return; // FIX: guard after every await
+      if (!mounted) return;
 
       setState(() {
         quizData = data;
         alreadyPlayed = played;
+        myAttempt = attempt;
         playersToday = count;
         loading = false;
       });
     } catch (e) {
-      if (!mounted) return; // FIX: guard in catch block too
+      if (!mounted) return;
       setState(() => loading = false);
     }
   }
 
-  String _timeLeft(Timestamp expiresAt) {
-    final now = DateTime.now().toUtc();
-    final diff = expiresAt.toDate().difference(now);
-
-    if (diff.isNegative) return "Expired";
-    return "${diff.inHours}h ${diff.inMinutes % 60}m";
-  }
-
   @override
   Widget build(BuildContext context) {
-    final quizId = getTodayQuizId();
-
     if (loading) {
       return Scaffold(body: DailyQuizEntryScreen.gradientBg());
     }
@@ -191,36 +203,75 @@ class _DailyQuizDetailScreenState extends State<DailyQuizDetailScreen> {
           Padding(
             padding: const EdgeInsets.all(20),
             child: quizData == null
-                ? const Center(
-                    child: Text(
-                      "No Daily Quiz Available Today",
-                      style: TextStyle(color: Colors.white70, fontSize: 18),
-                    ),
-                  )
-                : _buildQuizContent(context, quizId),
+                ? _buildPreparing()
+                : SingleChildScrollView(child: _buildQuizContent(context)),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildQuizContent(BuildContext context, String quizId) {
-    // FIX: Null-safe Timestamp access. Force-cast `as Timestamp`
-    // crashed when the expiresAt field was missing from Firestore.
-    final expiresAtRaw = quizData?['expiresAt'];
-    final Timestamp expiresAt = expiresAtRaw is Timestamp
-        ? expiresAtRaw
-        : Timestamp.fromDate(DateTime.now().subtract(const Duration(days: 1)));
-    final isExpired = expiresAt.toDate().isBefore(DateTime.now().toUtc());
+  // Shown only in the rare moment the new quiz is not there yet.
+  Widget _buildPreparing() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.auto_awesome, color: Colors.white54, size: 56),
+          const SizedBox(height: 16),
+          const Text(
+            "Today's quiz is being prepared",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'A fresh AI quiz arrives every day at 12:00 AM.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white70),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: 220,
+            child: DailyQuizEntryScreen.glassButton(
+              text: 'Refresh',
+              onTap: () {
+                setState(() => loading = true);
+                _loadQuiz();
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-    final bool isPracticeMode = isExpired;
-    final bool disableStart = !isPracticeMode && alreadyPlayed;
+  Widget _buildQuizContent(BuildContext context) {
+    final data = quizData!;
+    final quizId = _quizId;
+    final user = FirebaseAuth.instance.currentUser;
+
+    final expiresAtRaw = data['expiresAt'];
+    final DateTime expiresAt = expiresAtRaw is Timestamp
+        ? expiresAtRaw.toDate()
+        : DailyQuizClock.nextMidnight();
+
+    final String title = (data['title'] ?? 'Daily Challenge').toString();
+    final String topic = (data['topic'] ?? '').toString();
+    final int totalQuestions = (data['totalQuestions'] as num?)?.toInt() ?? 10;
+    final int minutes =
+        ((data['timeLimitSeconds'] as num?)?.toInt() ?? 600) ~/ 60;
+    final int xp = (data['xpReward'] as num?)?.toInt() ?? 150;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          quizData!['title'],
+          title,
           style: const TextStyle(
             color: Colors.white,
             fontSize: 22,
@@ -229,60 +280,95 @@ class _DailyQuizDetailScreenState extends State<DailyQuizDetailScreen> {
         ),
         const SizedBox(height: 10),
         Text(
-          "${quizData!['totalQuestions']} Questions • ${quizData!['timeLimitSeconds'] ~/ 60} Minutes",
+          '$totalQuestions Questions • $minutes Minutes',
           style: const TextStyle(color: Colors.white70),
         ),
+        if (topic.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              color: Colors.tealAccent.withOpacity(0.15),
+              border: Border.all(color: Colors.tealAccent.withOpacity(0.5)),
+            ),
+            child: Text(
+              'Topic: $topic',
+              style: const TextStyle(color: Colors.tealAccent, fontSize: 12),
+            ),
+          ),
+        ],
         const SizedBox(height: 30),
 
-        _infoTile("⏳ Time Left", _timeLeft(expiresAt)),
         _infoTile(
-          "🔥 XP Reward",
-          isPracticeMode ? "Practice Only" : "+${quizData!['xpReward']} XP",
+          '⏳ New quiz in',
+          DailyQuizClock.formatCountdown(_untilNext),
         ),
-        _infoTile("🌍 Players Today", playersToday.toString()),
+        _infoTile('🔥 XP Reward', '+$xp XP'),
+        _infoTile('🌍 Players Today', playersToday.toString()),
 
-        const SizedBox(height: 50),
+        const SizedBox(height: 36),
 
-        DailyQuizEntryScreen.glassButton(
-          text: isPracticeMode
-              ? "Practice Mode (30 Min)"
-              : alreadyPlayed
-              ? "Already Played"
-              : "Start Daily Quiz",
-          onTap: disableStart
-              ? null
-              : () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => QuizAttemptScreen(
-                        quizId: quizId,
-                        endAt: isPracticeMode
-                            ? DateTime.now().add(const Duration(minutes: 30))
-                            : expiresAt.toDate(),
-                        isDaily: !isPracticeMode,
-                        topicId: quizId,
-                        topicTitle: quizData?['title'] ?? 'Daily Quiz',
+        if (!alreadyPlayed)
+          DailyQuizEntryScreen.glassButton(
+            text: 'Start Daily Quiz',
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => QuizAttemptScreen(
+                    quizId: quizId,
+                    endAt: expiresAt,
+                    isDaily: true,
+                    topicId: quizId,
+                    topicTitle: title,
+                  ),
+                ),
+              );
+              if (mounted) _loadQuiz();
+            },
+          )
+        else ...[
+          DailyQuizEntryScreen.glassButton(
+            text: myAttempt != null ? 'View My Result' : 'Already Played',
+            onTap: (myAttempt == null || user == null)
+                ? null
+                : () {
+                    final a = myAttempt!;
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => QuizResultScreen(
+                          quizId: quizId,
+                          attemptId: user.uid,
+                          quizTitle: title,
+                          score: (a['score'] as num?)?.toInt() ?? 0,
+                          total: (a['total'] as num?)?.toInt() ?? totalQuestions,
+                          percentage: (a['percentage'] as num?)?.toDouble() ?? 0,
+                          // Daily results are never time-locked.
+                          endAt: DateTime.now().subtract(
+                            const Duration(seconds: 1),
+                          ),
+                          passed: a['passed'] == true,
+                          passPercentage: 60.0,
+                          isDaily: true,
+                        ),
                       ),
-                    ),
-                  );
-
-                  _loadQuiz();
-                },
-        ),
+                    );
+                  },
+          ),
+        ],
 
         const SizedBox(height: 15),
 
         DailyQuizEntryScreen.glassButton(
-          text: "View Leaderboard",
+          text: 'View Leaderboard',
           onTap: () {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => QuizLeaderboardScreen(
-                  quizId: quizId,
-                  quizTitle: quizData!['title'],
-                ),
+                builder: (_) =>
+                    DailyLeaderboardScreen(quizId: quizId, quizTitle: title),
               ),
             );
           },

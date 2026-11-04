@@ -1,198 +1,248 @@
-// // ============================================================
-// // FILE: lib/ads/widgets/banner_ad_widget.dart
-// //
-// // BUGS FIXED:
-// //   1. CRITICAL: Used fixed AdSize.banner (320×50) which has the
-// //      lowest fill rate of all banner formats. Switched to an
-// //      anchored adaptive banner sized to the screen width —
-// //      adaptive banners get 10-20 % higher eCPM and much better
-// //      fill because they fit every device perfectly.
-// //
-// //   2. AnimatedOpacity had opacity hardcoded to 1.0 — the fade-in
-// //      never ran. Fixed with a proper _opacity state variable that
-// //      starts at 0.0 and is set to 1.0 after the ad loads.
-// //
-// //   3. No retry logic: once _adFailed was set the banner was
-// //      permanently blank for the session. Added a retry with a
-// //      5-second delay so transient network failures self-heal.
-// //
-// //   4. Height was hardcoded to 52 px regardless of the actual ad
-// //      size. After loading, the real height comes from the ad's
-// //      size object. Fixed to use _adHeight which defaults to 52
-// //      and is updated to the real height on load.
-// //
-// //   5. AdWidget was wrapped in a SizedBox using _bannerAd!.size
-// //      which can be wrong before the ad is confirmed loaded.
-// //      Now dimensions are stored in confirmed state variables.
-// // ============================================================
+// ============================================================================
+// BannerAdWidget
+//
+// Live, active Adaptive Banner widget for low-engagement / utility screens
+// (Profile, Settings, About, Privacy Policy, Terms & Conditions, History,
+// Notifications — see the monetization spec for the full allow-list).
+// NEVER place this on gameplay, result, leaderboard, battle, auth, payment,
+// or premium screens.
+//
+// Design:
+//   • Premium users (isPremiumProvider) never see this — collapses to zero
+//     height instantly and never even makes an ad request.
+//   • Uses a current-orientation ANCHORED ADAPTIVE banner sized to the
+//     widget's own available width (not a fixed 320x50) — higher fill
+//     rate, no clipping, fits both portrait and landscape.
+//   • Loads lazily, once, after the first frame — never in initState
+//     directly (MediaQuery isn't safe to read before layout exists).
+//   • One BannerAd instance per mounted widget; disposed in dispose().
+//     Never re-requests while a request is already in flight or a banner
+//     is already loaded/cached.
+//   • On failure: retries a few times with a fixed delay, then hides
+//     completely (SizedBox.shrink, no reserved blank space) rather than
+//     leaving a dead grey box on screen forever.
+//
+// Ad unit configuration mirrors RewardedAdService's pattern exactly: flip
+// ONE constant to switch between Google's test unit and the real AdMob
+// unit. This is a BRAND NEW placement (unlike the rewarded ad, which is
+// already verified end-to-end) — left on TEST ads until you've confirmed
+// banners render correctly on every allow-listed screen. Flip
+// [_useTestAds] to false only after that check.
+// ============================================================================
 
-// import 'dart:async';
+import 'dart:async';
 
-// import 'package:QuizSphere/ads/provider/premium_provider.dart';
-// import 'package:flutter/foundation.dart' show kIsWeb;
-// import 'package:flutter/material.dart';
-// import 'package:flutter_riverpod/flutter_riverpod.dart';
-// import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform, debugPrint;
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
-// import '../services/admob_service.dart';
+import '../provider/premium_provider.dart';
+import '../services/ad_analytics_service.dart';
 
-// class BannerAdWidget extends ConsumerStatefulWidget {
-//   const BannerAdWidget({super.key});
+class BannerAdWidget extends ConsumerStatefulWidget {
+  /// Identifies which screen this banner is on, for analytics only (e.g.
+  /// 'profile', 'settings'). Purely a label — never affects ad behavior.
+  final String screenName;
 
-//   @override
-//   ConsumerState<BannerAdWidget> createState() => _BannerAdWidgetState();
-// }
+  const BannerAdWidget({super.key, this.screenName = 'unknown'});
 
-// class _BannerAdWidgetState extends ConsumerState<BannerAdWidget> {
-//   BannerAd? _bannerAd;
-//   bool _adLoaded = false;
-//   bool _adFailed = false;
-//   double _adHeight = 52.0; // default placeholder height
-//   double _adWidth = double.infinity;
-//   double _opacity = 0.0; // starts at 0, fades in after ad loads
+  @override
+  ConsumerState<BannerAdWidget> createState() => _BannerAdWidgetState();
+}
 
-//   Timer? _retryTimer;
-//   int _retryCount = 0;
-//   static const int _maxRetries = 3;
-//   static const Duration _retryDelay = Duration(seconds: 5);
+class _BannerAdWidgetState extends ConsumerState<BannerAdWidget> {
+  // ── Ad unit configuration ─────────────────────────────────────────────
+  static const bool _useTestAds = false;
 
-//   @override
-//   void initState() {
-//     super.initState();
-//     WidgetsBinding.instance.addPostFrameCallback((_) => _loadAd());
-//   }
+  /// Google's official Android test Adaptive Banner ad unit ID.
+  static const String _testAdUnitId = 'ca-app-pub-3940256099942544/6300978111';
 
-//   @override
-//   void dispose() {
-//     _retryTimer?.cancel();
-//     _bannerAd?.dispose();
-//     super.dispose();
-//   }
+  /// Your real production Banner ad unit ID.
+  static const String _productionAdUnitId =
+      'ca-app-pub-5737850023326024/8945974038';
 
-//   Future<void> _loadAd() async {
-//     if (kIsWeb || !mounted) return;
+  static const String _bannerAdUnitId =
+      _useTestAds ? _testAdUnitId : _productionAdUnitId;
 
-//     final isPremium = ref.read(isPremiumProvider);
-//     if (isPremium) return;
+  static bool get _isSupportedPlatform =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
-//     // Dispose any existing ad before loading a new one
-//     _bannerAd?.dispose();
-//     if (mounted) {
-//       setState(() {
-//         _bannerAd = null;
-//         _adLoaded = false;
-//         _adFailed = false;
-//         _opacity = 0.0;
-//       });
-//     }
+  BannerAd? _bannerAd;
+  bool _adLoaded = false;
+  bool _requestInFlight = false;
+  double _adHeight = 50;
+  double _adWidth = double.infinity;
+  double _opacity = 0.0;
 
-//     // FIX: Use adaptive banner sized to the actual screen width.
-//     // This is AdMob's recommended banner type — it achieves much
-//     // higher fill rates than the fixed 320x50 banner.
-//     final screenWidth = MediaQuery.of(context).size.width.truncate();
+  Timer? _retryTimer;
+  int _retryCount = 0;
+  static const int _maxRetries = 3;
+  static const Duration _retryDelay = Duration(seconds: 5);
 
-//     AdSize adSize = AdSize.banner; // fallback
-//     try {
-//       final adaptive =
-//           await AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(
-//             screenWidth,
-//           );
-//       if (adaptive != null) adSize = adaptive;
-//     } catch (e) {
-//       debugPrint('[AdMob] Adaptive size failed, using standard banner: $e');
-//     }
+  @override
+  void initState() {
+    super.initState();
+    // Lazy load: wait for the first real frame/layout before touching
+    // MediaQuery or requesting an ad.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadAd());
+  }
 
-//     if (!mounted) return;
+  @override
+  void dispose() {
+    _retryTimer?.cancel();
+    _bannerAd?.dispose();
+    super.dispose();
+  }
 
-//     final ad = BannerAd(
-//       adUnitId: AdmobService.bannerAdUnitId,
-//       size: adSize,
-//       request: const AdRequest(),
-//       listener: BannerAdListener(
-//         onAdLoaded: (_) {
-//           debugPrint(
-//             '[AdMob] BannerAd loaded ✓  ${adSize.width}×${adSize.height}',
-//           );
-//           if (!mounted) return;
-//           setState(() {
-//             _adLoaded = true;
-//             _adFailed = false;
-//             _retryCount = 0;
-//             // Store confirmed dimensions once the ad is actually ready
-//             _adHeight = adSize.height.toDouble();
-//             _adWidth = adSize.width.toDouble();
-//           });
-//           // Small delay then fade in so the ad isn't jarring
-//           Future.delayed(const Duration(milliseconds: 80), () {
-//             if (mounted) setState(() => _opacity = 1.0);
-//           });
-//         },
-//         onAdFailedToLoad: (failedAd, error) {
-//           debugPrint(
-//             '[AdMob] BannerAd failed: ${error.message} (code ${error.code})',
-//           );
-//           failedAd.dispose();
-//           if (!mounted) return;
-//           setState(() {
-//             _bannerAd = null;
-//             _adLoaded = false;
-//             _adFailed = true;
-//           });
-//           // FIX: Retry on transient failures so a brief network hiccup
-//           // doesn't permanently hide the banner for the whole session.
-//           if (_retryCount < _maxRetries) {
-//             _retryCount++;
-//             debugPrint(
-//               '[AdMob] BannerAd retry $_retryCount/$_maxRetries '
-//               'in ${_retryDelay.inSeconds}s',
-//             );
-//             _retryTimer?.cancel();
-//             _retryTimer = Timer(_retryDelay, _loadAd);
-//           }
-//         },
-//         onAdOpened: (_) => debugPrint('[AdMob] BannerAd opened'),
-//         onAdClosed: (_) => debugPrint('[AdMob] BannerAd closed'),
-//         onAdImpression: (_) => debugPrint('[AdMob] BannerAd impression'),
-//       ),
-//     );
+  Future<void> _loadAd() async {
+    if (!mounted || !_isSupportedPlatform) return;
 
-//     ad.load();
-//     if (mounted) setState(() => _bannerAd = ad);
-//   }
+    // Premium users never get a banner request in the first place.
+    if (ref.read(isPremiumProvider)) return;
 
-//   @override
-//   Widget build(BuildContext context) {
-//     final isPremium = ref.watch(isPremiumProvider);
+    // Prevent duplicate/overlapping requests.
+    if (_requestInFlight || _adLoaded) return;
+    _requestInFlight = true;
 
-//     // Premium users or web: collapse completely
-//     if (isPremium || kIsWeb) return const SizedBox.shrink();
+    final screenWidth = MediaQuery.of(context).size.width.truncate();
 
-//     // All retries exhausted and still no ad → collapse completely
-//     if (_adFailed && _retryCount >= _maxRetries) {
-//       return const SizedBox.shrink();
-//     }
+    AdSize adSize = AdSize.banner;
+    try {
+      final adaptive = await AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(
+        screenWidth,
+      );
+      if (adaptive != null) adSize = adaptive;
+    } catch (e) {
+      debugPrint('[BannerAdWidget] Adaptive size lookup failed, using standard banner: $e');
+    }
 
-//     // Reserve placeholder height while the first load is in progress
-//     // so the layout below doesn't jump when the ad appears.
-//     return AnimatedContainer(
-//       duration: const Duration(milliseconds: 250),
-//       width: double.infinity,
-//       height: _adLoaded ? _adHeight : (_adFailed ? 0 : 52.0),
-//       color: Colors.black,
-//       alignment: Alignment.center,
-//       child: _adLoaded && _bannerAd != null
-//           ? AnimatedOpacity(
-//               // FIX: _opacity starts at 0.0 and becomes 1.0 after ad loads,
-//               // giving a proper smooth fade-in instead of a hard pop-in.
-//               opacity: _opacity,
-//               duration: const Duration(milliseconds: 400),
-//               child: SizedBox(
-//                 width: _adWidth,
-//                 height: _adHeight,
-//                 child: AdWidget(ad: _bannerAd!),
-//               ),
-//             )
-//           : const SizedBox.shrink(),
-//     );
-//   }
-// }
+    if (!mounted) {
+      _requestInFlight = false;
+      return;
+    }
+
+    AdAnalyticsService.bannerRequested(widget.screenName);
+
+    final ad = BannerAd(
+      adUnitId: _bannerAdUnitId,
+      size: adSize,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          AdAnalyticsService.bannerLoaded(widget.screenName);
+          _requestInFlight = false;
+          if (!mounted) {
+            ad.dispose();
+            return;
+          }
+          setState(() {
+            _adLoaded = true;
+            _retryCount = 0;
+            _adHeight = adSize.height.toDouble();
+            _adWidth = adSize.width.toDouble();
+          });
+          // Small fade-in so the banner doesn't just pop into place.
+          Future.delayed(const Duration(milliseconds: 80), () {
+            if (mounted) setState(() => _opacity = 1.0);
+          });
+        },
+        onAdFailedToLoad: (ad, error) {
+          AdAnalyticsService.bannerFailed(
+            widget.screenName,
+            '${error.code}: ${error.message}',
+          );
+          _requestInFlight = false;
+          ad.dispose();
+          if (!mounted) return;
+          setState(() {
+            _bannerAd = null;
+            _adLoaded = false;
+          });
+          if (_retryCount < _maxRetries) {
+            _retryCount++;
+            _retryTimer?.cancel();
+            _retryTimer = Timer(_retryDelay, () {
+              if (mounted) _loadAd();
+            });
+          }
+        },
+        onAdClicked: (ad) => AdAnalyticsService.bannerClicked(widget.screenName),
+      ),
+    );
+
+    _bannerAd = ad;
+    ad.load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isPremium = ref.watch(isPremiumProvider);
+
+    if (isPremium) {
+      // Covers the (currently theoretical, but future-proofed) case of a
+      // user upgrading to Premium mid-session while a banner is already
+      // loaded — release it immediately; Premium must never show ads.
+      if (_bannerAd != null) {
+        final adToDispose = _bannerAd;
+        _bannerAd = null;
+        WidgetsBinding.instance.addPostFrameCallback((_) => adToDispose?.dispose());
+      }
+      return const SizedBox.shrink();
+    }
+
+    if (!_isSupportedPlatform) {
+      return const SizedBox.shrink();
+    }
+
+    if (!_adLoaded || _bannerAd == null) {
+      // Nothing to show yet (first load in flight, or a retry is pending
+      // after a failure) — collapse completely rather than holding open a
+      // blank placeholder box.
+      return const SizedBox.shrink();
+    }
+
+    // Families Policy: ads must be clearly distinguishable from app content.
+    // The banner is wrapped in a labelled, visually distinct container with
+    // its own background, a divider line and spacing from the screen above.
+    return SafeArea(
+      top: false,
+      child: AnimatedOpacity(
+        opacity: _opacity,
+        duration: const Duration(milliseconds: 400),
+        child: Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(top: 12),
+          padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
+          decoration: const BoxDecoration(
+            color: Color(0xFFEFEFEF),
+            border: Border(
+              top: BorderSide(color: Colors.black26, width: 1),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Advertisement',
+                style: TextStyle(
+                  color: Colors.black54,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.6,
+                ),
+              ),
+              const SizedBox(height: 4),
+              SizedBox(
+                width: _adWidth,
+                height: _adHeight,
+                child: AdWidget(ad: _bannerAd!),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

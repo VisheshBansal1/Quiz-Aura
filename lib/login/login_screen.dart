@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:QuizSphere/quizes/home/onboarding_screen.dart';
 import 'package:QuizSphere/quizes/admin/screens/admin_daily_quiz_screen.dart';
+import 'package:QuizSphere/core/constants/app_colors.dart';
+import 'package:QuizSphere/core/widgets/agreement_text.dart';
 
 import 'auth/auth_service.dart';
+import 'create_account_screen.dart';
 
 // ── Named Route constants ────────────────────────────────────────────────────
 // Register these in your MaterialApp routes:
@@ -105,11 +108,7 @@ class _LoginScreenState extends State<LoginScreen> {
           // ===== Background Gradient =====
           Container(
             decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF1F1C2C), Color(0xFF928DAB)],
-              ),
+              gradient: AppColors.loginGradient,
             ),
           ),
 
@@ -237,48 +236,80 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
 
-                    // ===== Agreement Text =====
-                    const SizedBox(height: 14),
-                    _AgreementText(),
-
-                    const SizedBox(height: 16),
-
-                    // ===== Divider =====
-                    Row(
-                      children: const [
-                        Expanded(child: Divider(color: Colors.white30)),
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 8),
-                          child: Text(
-                            "OR",
-                            style: TextStyle(color: Colors.white60),
-                          ),
-                        ),
-                        Expanded(child: Divider(color: Colors.white30)),
-                      ],
-                    ),
-
-                    const SizedBox(height: 16),
-
                     // ===== Google Login =====
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: OutlinedButton.icon(
-                        onPressed: loading ? null : _loginGoogle,
-                        icon:
-                            const Icon(Icons.g_mobiledata, size: 28),
-                        label: const Text(
-                          "Continue with Google",
-                          style: TextStyle(fontSize: 15),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          side: const BorderSide(
-                              color: Colors.white54),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                    // Web only: no Android/iOS OAuth client is configured,
+                    // so this — divider included — is skipped entirely on
+                    // those platforms rather than just visually hidden.
+                    if (kIsWeb) ...[
+                      const SizedBox(height: 16),
+                      Row(
+                        children: const [
+                          Expanded(child: Divider(color: Colors.white30)),
+                          Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 8),
+                            child: Text(
+                              "OR",
+                              style: TextStyle(color: Colors.white60),
+                            ),
                           ),
+                          Expanded(child: Divider(color: Colors.white30)),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: OutlinedButton.icon(
+                          onPressed: loading ? null : _loginGoogle,
+                          icon: const Icon(Icons.g_mobiledata, size: 28),
+                          label: const Text(
+                            "Continue with Google",
+                            style: TextStyle(fontSize: 15),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: const BorderSide(color: Colors.white54),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    // ===== Agreement Text =====
+                    const SizedBox(height: 20),
+                    const AgreementText(),
+
+                    // ===== Create Account Link =====
+                    const SizedBox(height: 18),
+                    TextButton(
+                      onPressed: loading
+                          ? null
+                          : () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const CreateAccountScreen(),
+                                ),
+                              );
+                            },
+                      child: RichText(
+                        text: const TextSpan(
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 13,
+                          ),
+                          children: [
+                            TextSpan(text: "Don't have an account? "),
+                            TextSpan(
+                              text: "Create one",
+                              style: TextStyle(
+                                color: Color(0xFFB3AEFF),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -297,54 +328,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: Colors.white),
               ),
             ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Agreement Text Widget ────────────────────────────────────────────────────
-
-class _AgreementText extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return RichText(
-      textAlign: TextAlign.center,
-      text: TextSpan(
-        style: const TextStyle(
-          color: Colors.white54,
-          fontSize: 12,
-          height: 1.6,
-        ),
-        children: [
-          const TextSpan(text: 'By continuing, you agree to QuizAura\n'),
-          // ── Terms & Conditions link ──
-          TextSpan(
-            text: 'Terms & Conditions',
-            style: const TextStyle(
-              color: Color(0xFFB3AEFF),
-              fontWeight: FontWeight.w600,
-              decoration: TextDecoration.underline,
-              decorationColor: Color(0xFFB3AEFF),
-            ),
-            recognizer: TapGestureRecognizer()
-              ..onTap = () =>
-                  Navigator.of(context).pushNamed('/terms'),
-          ),
-          const TextSpan(text: ' and '),
-          // ── Privacy Policy link ──
-          TextSpan(
-            text: 'Privacy Policy',
-            style: const TextStyle(
-              color: Color(0xFFB3AEFF),
-              fontWeight: FontWeight.w600,
-              decoration: TextDecoration.underline,
-              decorationColor: Color(0xFFB3AEFF),
-            ),
-            recognizer: TapGestureRecognizer()
-              ..onTap = () =>
-                  Navigator.of(context).pushNamed('/privacy'),
-          ),
         ],
       ),
     );

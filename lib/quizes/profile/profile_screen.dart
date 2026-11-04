@@ -27,6 +27,7 @@ import 'package:QuizSphere/quizes/profile/profile_screen_widget/info_card.dart';
 import 'package:QuizSphere/quizes/profile/profile_screen_widget/logout_tile.dart';
 import 'package:QuizSphere/quizes/profile/services/level_service.dart';
 import 'package:QuizSphere/quizes/profile/services/streak_service.dart';
+import 'package:QuizSphere/ads/widgets/banner_ad_widget.dart';
 // import 'package:QuizSphere/ads/screen/premium_screen.dart'; // ADS DISABLED
 // import 'package:QuizSphere/ads/provider/premium_provider.dart'; // ADS DISABLED
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -45,6 +46,7 @@ import '../../features/leaderboard/screens/branch_leaderboard_screen.dart';
 import '../../features/rewards/screens/badges_screen.dart';
 import '../../features/performance/screens/performance_dashboard_screen.dart';
 import 'edit_profile_screen.dart';
+import 'about_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -546,6 +548,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                               ),
                             ),
+                            const Divider(color: Colors.white12),
+                            _QuickActionTile(
+                              icon: Icons.info_outline_rounded,
+                              label: 'About',
+                              color: Colors.blueAccent,
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const AboutScreen(),
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -620,6 +634,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
+      bottomNavigationBar: const BannerAdWidget(screenName: 'profile'),
     );
   }
 

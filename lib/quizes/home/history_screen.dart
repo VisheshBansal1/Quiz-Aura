@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import 'quiz_result_screen.dart';
 import 'quiz_result_locked_screen.dart';
+import 'package:QuizSphere/ads/widgets/banner_ad_widget.dart';
 
 class HistoryScreen extends StatelessWidget {
   const HistoryScreen({super.key});
@@ -113,6 +114,7 @@ class HistoryScreen extends StatelessWidget {
           ),
         ],
       ),
+      bottomNavigationBar: const BannerAdWidget(screenName: 'history'),
     );
   }
 

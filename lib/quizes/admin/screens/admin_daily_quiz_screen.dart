@@ -179,7 +179,11 @@ class _AdminDailyQuizManagerScreenState
   final _timeCtrl = TextEditingController(text: '600');
   final _xpCtrl = TextEditingController(text: '150');
 
-  DateTime _selectedDate = DateTime.now().toUtc();
+  // Calendar date (IST) stored as y/m/d in a UTC DateTime — matches the
+  // quiz id the app and the auto-generator use (see DailyQuizClock).
+  DateTime _selectedDate = DateTime.now().toUtc().add(
+    const Duration(hours: 5, minutes: 30),
+  );
   List<QuestionModel> _questions = [];
   int _selectedCategoryIndex = 5; // Mix by default
 
@@ -226,14 +230,16 @@ class _AdminDailyQuizManagerScreenState
         '${_selectedDate.day.toString().padLeft(2, '0')}';
   }
 
-  DateTime get _expiresAt => DateTime.utc(
+  /// 12:00 AM IST of the selected day, as a real instant.
+  DateTime get _publishAt => DateTime.utc(
     _selectedDate.year,
     _selectedDate.month,
     _selectedDate.day,
-    23,
-    59,
-    59,
-  );
+  ).subtract(const Duration(hours: 5, minutes: 30));
+
+  /// 11:59:59 PM IST of the selected day.
+  DateTime get _expiresAt =>
+      _publishAt.add(const Duration(days: 1, seconds: -1));
 
   String _pickTopic() {
     final cat = _categories[_selectedCategoryIndex];
@@ -391,13 +397,22 @@ class _AdminDailyQuizManagerScreenState
         'timeLimitSeconds': int.tryParse(_timeCtrl.text) ?? 600,
         'xpReward': int.tryParse(_xpCtrl.text) ?? 150,
         'totalQuestions': _questions.length,
-        'publishAt': Timestamp.fromDate(_selectedDate),
+        'publishAt': Timestamp.fromDate(_publishAt),
+        'source': 'manual',
         'expiresAt': Timestamp.fromDate(_expiresAt),
         'isPublished': true,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
       final batch = FirebaseFirestore.instance.batch();
+
+      // Remove previously published questions so re-publishing the same
+      // day never doubles the question count.
+      final oldQuestions = await ref.collection('questions').get();
+      for (final d in oldQuestions.docs) {
+        batch.delete(d.reference);
+      }
+
       for (final q in _questions) {
         batch.set(ref.collection('questions').doc(), {
           'question': q.question,
@@ -652,7 +667,13 @@ class _AdminDailyQuizManagerScreenState
       ),
     );
     if (picked != null) {
-      setState(() => _selectedDate = picked.toUtc());
+      setState(
+        () => _selectedDate = DateTime.utc(
+          picked.year,
+          picked.month,
+          picked.day,
+        ),
+      );
     }
   }
 

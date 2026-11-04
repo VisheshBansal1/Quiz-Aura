@@ -22,7 +22,7 @@ class HeaderSection extends StatelessWidget {
         'https://cdn-icons-png.flaticon.com/512/3135/3135715.png',
       );
     }
-
+  
     // Local file path
     if (imagePath!.startsWith('/')) {
       return FileImage(File(imagePath!));
@@ -46,23 +46,23 @@ class HeaderSection extends StatelessWidget {
                 backgroundImage: _getProfileImage(),
                 backgroundColor: Colors.grey.shade800,
               ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.black,
-                    border: Border.all(color: Colors.white, width: 1),
-                  ),
-                  padding: const EdgeInsets.all(4),
-                  child: const Icon(
-                    Icons.camera_alt,
-                    size: 12,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
+              // Positioned(
+              //   bottom: 0,
+              //   right: 0,
+              //   child: Container(
+              //     decoration: BoxDecoration(
+              //       shape: BoxShape.circle,
+              //       color: Colors.black,
+              //       border: Border.all(color: Colors.white, width: 1),
+              //     ),
+              //     padding: const EdgeInsets.all(4),
+              //     child: const Icon(
+              //       Icons.camera_alt,
+              //       size: 12,
+              //       color: Colors.white,
+              //     ),
+              //   ),
+              // ),
             ],
           ),
 

@@ -1,18 +1,29 @@
 // ── Ad integration note ─────────────────────────────────────────────────────
-// Rewarded ad shown BEFORE generating AI questions for free users.
-// Premium users (isPremium == true) skip the ad and generate immediately.
-// If the ad fails to load → fail-open: generate anyway.
+// Rewarded ad shown BEFORE generating AI questions for FREE users, on
+// Android only:
+//   • Web                        → ad system skipped entirely, generate now.
+//   • Non-Android (iOS/desktop)  → ad system skipped gracefully, generate now.
+//   • Premium (isPremiumProvider)→ skip the ad, generate now.
+//   • Free + ad not ready/failed → fail OPEN, generate now (never block).
+//   • Free + ad shown, reward earned    → generate now.
+//   • Free + ad shown, closed WITHOUT reward → do NOT generate.
+// The ad itself is loaded/shown by RewardedAdService (see
+// lib/ads/services/rewarded_ad_service.dart); this screen only decides
+// WHEN to call it and what to do with each outcome.
 //
-// BUG FIXED:
-//   Previously, `loading` was only set to true INSIDE _doGenerate(),
-//   which runs AFTER the rewarded ad finishes (~5 seconds).
-//   During those 5 seconds the button appeared frozen / app was idle.
-//   FIX: Set loading=true IMMEDIATELY when the button is tapped, BEFORE
-//   starting the ad load. This shows the overlay instantly.
+// BUG FIXED (pre-existing, still applies):
+//   `loading` must be set INSIDE _doGenerate(), not before it — some paths
+//   above skip straight to _doGenerate() without ever touching the ad flow.
+//   `_adLoading` is what gives instant visual feedback for the ad-watching
+//   path specifically: it's set the moment showAd() is called, before any
+//   ad-display latency, so the button never appears frozen.
 // ────────────────────────────────────────────────────────────────────────────
 
-// import 'package:QuizSphere/ads/provider/premium_provider.dart'; // ADS DISABLED
-// import 'package:QuizSphere/ads/services/admob_service.dart'; // ADS DISABLED
+import 'package:QuizSphere/ads/provider/premium_provider.dart';
+import 'package:QuizSphere/ads/services/rewarded_ad_service.dart';
+import 'package:QuizSphere/quizes/admin/screens/admin_dashboard_screen.dart';
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -121,15 +132,77 @@ class _AiGenerateQuestionsScreenState
     if (questionCount < 1 || questionCount > maxQuestionsAllowed) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Questions must be between 1 and $maxQuestionsAllowed.'),
+          content: Text(
+            'Questions must be between 1 and $maxQuestionsAllowed.',
+          ),
         ),
       );
       return;
     }
 
-    // ADS DISABLED: always go straight to generation
-    // final isPremium = ref.read(isPremiumProvider);
-    await _doGenerate();
+    // ── Platform check ────────────────────────────────────────────────
+    // Web: Google Mobile Ads isn't supported there — never attempt to load
+    // or show an ad, and never block quiz generation. (This screen is
+    // already unreachable on web via the isBlockedOnWeb guard above; this
+    // check makes the ad-gating logic correct and reusable on its own too,
+    // e.g. if it's ever wired into another entry point that doesn't share
+    // that guard.)
+    if (AiQuizAccessService.isBlockedOnWeb) {
+      await _doGenerate();
+      return;
+    }
+
+    // Any platform other than Android (iOS, desktop, …): skip ads
+    // gracefully, same rule — never block generation.
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      await _doGenerate();
+      return;
+    }
+
+    // ── Premium check ─────────────────────────────────────────────────
+    // Premium users must never see ads.
+    final isPremium = ref.read(isPremiumProvider);
+    if (isPremium) {
+      await _doGenerate();
+      return;
+    }
+
+    // ── Free user on Android: gate generation behind a rewarded ad ─────
+    if (!RewardedAdService.instance.isAdReady) {
+      // Ad didn't finish preloading in time (or failed to load) — do NOT
+      // block a free user just because the ad system isn't cooperating.
+      await _doGenerate();
+      return;
+    }
+
+    setState(() => _adLoading = true);
+
+    RewardedAdService.instance.showAd(
+      onReward: () {
+        // Reward earned — this is the only path allowed to generate.
+        if (!mounted) return;
+        setState(() => _adLoading = false);
+        _doGenerate();
+      },
+      onAdDismissed: () {
+        // Closed before earning the reward — per spec, do NOT generate.
+        // Just restore the button so the user can tap Generate again.
+        if (!mounted) return;
+        setState(() => _adLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Watch the full ad to generate your quiz for free.'),
+          ),
+        );
+      },
+      onAdFailedToShow: () {
+        // Ad was cached but couldn't be displayed (rare) — fail open, same
+        // as "ad not ready".
+        if (!mounted) return;
+        setState(() => _adLoading = false);
+        _doGenerate();
+      },
+    );
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -269,7 +342,16 @@ class _AiGenerateQuestionsScreenState
           .doc(widget.quizId)
           .update({'totalQuestions': countSnapshot.count ?? 0});
 
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) {
+              return AdminDashboardScreen();
+            },
+          ),
+        );
+      }
     } catch (e) {
       debugPrint('SAVE ERROR: $e');
       rethrow;
@@ -295,8 +377,8 @@ class _AiGenerateQuestionsScreenState
     final String overlayMessage = _adLoading
         ? 'Loading ad…\nPlease wait a moment'
         : saving
-            ? 'Saving questions…'
-            : 'Generating questions…';
+        ? 'Saving questions…'
+        : 'Generating questions…';
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F2027),
@@ -485,8 +567,8 @@ class _AiGenerateQuestionsScreenState
                 _adLoading
                     ? "Loading Ad…"
                     : loading
-                        ? "Generating…"
-                        : "Generate",
+                    ? "Generating…"
+                    : _generateLabel(),
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
@@ -494,6 +576,16 @@ class _AiGenerateQuestionsScreenState
         ],
       ),
     );
+  }
+
+  /// Families Policy: a button that triggers an ad must say so. Free users
+  /// on Android see "Watch Ad & Generate"; Premium / other platforms see
+  /// plain "Generate".
+  String _generateLabel() {
+    final bool showsAd = !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android &&
+        !ref.watch(isPremiumProvider);
+    return showsAd ? "Watch Ad & Generate" : "Generate";
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -580,23 +672,23 @@ class _AiGenerateQuestionsScreenState
   // UI HELPERS
   // ─────────────────────────────────────────────────────────────────────────
   Widget _gradientBg() => Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
-          ),
-        ),
-      );
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
+      ),
+    ),
+  );
 
   Widget _card({required Widget child}) => Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          color: Colors.white.withOpacity(0.10),
-          border: Border.all(color: Colors.white.withOpacity(0.20)),
-        ),
-        child: child,
-      );
+    margin: const EdgeInsets.only(bottom: 12),
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(18),
+      color: Colors.white.withOpacity(0.10),
+      border: Border.all(color: Colors.white.withOpacity(0.20)),
+    ),
+    child: child,
+  );
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:QuizSphere/ads/widgets/banner_ad_widget.dart';
 
 class TermsConditionsScreen extends StatelessWidget {
   const TermsConditionsScreen({super.key});
@@ -231,6 +232,7 @@ class TermsConditionsScreen extends StatelessWidget {
           ],
         ),
       ),
+      bottomNavigationBar: const BannerAdWidget(screenName: 'terms_conditions'),
     );
   }
 }

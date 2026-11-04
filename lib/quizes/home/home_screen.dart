@@ -8,6 +8,7 @@
 // ============================================================
 
 import 'package:QuizSphere/quizes/home/quiz_list_screen.dart';
+import 'package:QuizSphere/features/battle/widgets/battle_banner.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -36,76 +37,83 @@ class _HomePageState extends State<HomePage>
           colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
         ),
       ),
-      child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('topics')
-            .where('isActive', isEqualTo: true)
-            .orderBy('createdAt', descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const _ShimmerGrid();
-          }
-
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.wifi_off, color: Colors.white38, size: 48),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Failed to load categories',
-                    style: TextStyle(color: Colors.white70),
+      child: Column(
+        children: [
+          const BattleBanner(),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: FirebaseFirestore.instance
+                .collection('topics')
+                .where('isActive', isEqualTo: true)
+                .orderBy('createdAt', descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const _ShimmerGrid();
+              }
+    
+              if (snapshot.hasError) {
+                return Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.wifi_off, color: Colors.white38, size: 48),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Failed to load categories',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                      const SizedBox(height: 16),
+                      TextButton(
+                        onPressed: () => setState(() {}),
+                        child: const Text(
+                          'Retry',
+                          style: TextStyle(color: Colors.tealAccent),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: () => setState(() {}),
-                    child: const Text(
-                      'Retry',
-                      style: TextStyle(color: Colors.tealAccent),
-                    ),
+                );
+              }
+    
+              final docs = snapshot.data?.docs ?? [];
+    
+              if (docs.isEmpty) {
+                return const Center(
+                  child: Text(
+                    'No quiz categories yet',
+                    style: TextStyle(fontSize: 16, color: Colors.white70),
                   ),
-                ],
-              ),
-            );
-          }
-
-          final docs = snapshot.data?.docs ?? [];
-
-          if (docs.isEmpty) {
-            return const Center(
-              child: Text(
-                'No quiz categories yet',
-                style: TextStyle(fontSize: 16, color: Colors.white70),
-              ),
-            );
-          }
-
-          return GridView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-            itemCount: docs.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisSpacing: 16,
-              crossAxisSpacing: 16,
-              childAspectRatio: 0.95,
-            ),
-            itemBuilder: (context, i) {
-              final doc = docs[i];
-              final data = doc.data();
-
-              return _AnimatedTopicCard(
-                key: ValueKey(doc.id),
-                index: i,
-                topicId: doc.id,
-                title: data['title'] ?? 'Quiz',
-                subtitle: data['subtitle'] ?? '',
-                iconName: data['icon'] ?? 'quiz',
+                );
+              }
+    
+              return GridView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                itemCount: docs.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 16,
+                  crossAxisSpacing: 16,
+                  childAspectRatio: 0.78,
+                ),
+                itemBuilder: (context, i) {
+                  final doc = docs[i];
+                  final data = doc.data();
+    
+                  return _AnimatedTopicCard(
+                    key: ValueKey(doc.id),
+                    index: i,
+                    topicId: doc.id,
+                    title: data['title'] ?? 'Quiz',
+                    subtitle: data['subtitle'] ?? '',
+                    iconName: data['icon'] ?? 'quiz',
+                  );
+                },
               );
             },
-          );
-        },
+          ),
+          ),
+        ],
       ),
     );
   }

@@ -1,4 +1,5 @@
 import 'package:QuizSphere/login/login_screen.dart';
+import 'package:QuizSphere/ads/widgets/banner_ad_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -85,6 +86,7 @@ class SettingsScreen extends StatelessWidget {
           ),
         ],
       ),
+      bottomNavigationBar: const BannerAdWidget(screenName: 'settings'),
     );
   }
 

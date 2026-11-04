@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:QuizSphere/ads/widgets/banner_ad_widget.dart';
 
 class PrivacyPolicyScreen extends StatelessWidget {
   const PrivacyPolicyScreen({super.key});
@@ -222,7 +223,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
               paragraphs: const [
                 'If you have any questions or concerns about this Privacy Policy, please reach out to us:',
               ],
-              contact: 'QuizAura_official@gmail.com',
+              contact: 'enqusoft@gmail.com',
             ),
 
             const SizedBox(height: 30),
@@ -241,6 +242,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
           ],
         ),
       ),
+      bottomNavigationBar: const BannerAdWidget(screenName: 'privacy_policy'),
     );
   }
 }

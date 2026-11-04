@@ -1,43 +1,22 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- ═══════════════════════════════════════════════════════════════
-         PERMISSIONS
-         ═══════════════════════════════════════════════════════════════ -->
-
-    <!-- Internet — Firebase, Firestore, AdMob, Groq AI, IAP -->
+    <!-- Internet: Firebase, Firestore, AdMob, Groq AI -->
     <uses-permission android:name="android.permission.INTERNET"/>
-
-    <!-- Push Notifications — FCM (required on Android 13+) -->
+    <!-- Push notifications (required on Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-
-    <!-- FCM delivery after device reboot -->
+    <!-- FCM delivery after reboot -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-
-    <!-- In-App Purchases — remove_ads_monthly / remove_ads_lifetime -->
-    <uses-permission android:name="com.android.vending.BILLING"/>
-
-    <!-- Camera — edit_profile_screen ImageSource.camera -->
-    <uses-permission android:name="android.permission.CAMERA"/>
-
-    <!-- Gallery picker — Android 13+ -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
-    <!-- Gallery picker — Android 12 and below -->
-    
-    <uses-permission
-        android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32"/>
-
-    <!-- PDF certificate save/share — Android 9 and below only -->
-    <uses-permission
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28"/>
-
-    <!-- FCM notification vibration -->
+    <!-- Notification vibration -->
     <uses-permission android:name="android.permission.VIBRATE"/>
 
-    <!-- ═══════════════════════════════════════════════════════════════
-         APPLICATION
-         ═══════════════════════════════════════════════════════════════ -->
+    <!-- CHANGED (Families Policy): the Google Mobile Ads SDK adds the
+         advertising-ID permission through manifest merge. Apps whose
+         audience includes children must not declare it, so it is removed
+         here. Ads still work (child-directed / non-personalised). -->
+    <uses-permission
+        android:name="com.google.android.gms.permission.AD_ID"
+        tools:node="remove"/>
 
     <application
         android:label="QuizAura"
@@ -46,7 +25,6 @@
         android:usesCleartextTraffic="true"
         android:networkSecurityConfig="@xml/network_security_config">
 
-        <!-- ── Main Activity ─────────────────────────────────────────── -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -61,90 +39,46 @@
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme"/>
 
-            <!-- Launcher -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
-            <!-- ── Deep Link: app://battle/{battleId} ─────────────────
-                 Source: lib/features/battle/services/deep_link_service.dart
-            ──────────────────────────────────────────────────────────── -->
+            <!-- Deep link: app://battle/{battleId} -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data
-                    android:scheme="app"
-                    android:host="battle"/>
+                <data android:scheme="app" android:host="battle"/>
             </intent-filter>
 
-            <!-- ── Deep Link: https://quizaura.app/battle/{battleId} ──
-                 android:autoVerify="true" enables App Links (no chooser dialog).
-                 Requires a /.well-known/assetlinks.json on your domain.
-                 Source: lib/features/battle/services/deep_link_service.dart
-            ──────────────────────────────────────────────────────────── -->
+            <!-- App link: https://quizaura.app/battle/{battleId} -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data
-                    android:scheme="https"
-                    android:host="quizaura.app"
-                    android:pathPrefix="/battle"/>
+                <data android:scheme="https" android:host="quizaura.app" android:pathPrefix="/battle"/>
             </intent-filter>
-            <intent-filter android:autoVerify="true">
-  <action android:name="android.intent.action.VIEW"/>
-  <category android:name="android.intent.category.DEFAULT"/>
-  <category android:name="android.intent.category.BROWSABLE"/>
-  <data android:scheme="https" android:host="quizaura.netlify.app"/>
-</intent-filter>
 
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="quizaura.netlify.app"/>
+            </intent-filter>
         </activity>
 
-        <!-- Flutter embedding -->
-        <meta-data
-            android:name="flutterEmbedding"
-            android:value="2"/>
+        <meta-data android:name="flutterEmbedding" android:value="2"/>
 
-        <!-- ╔═══════════════════════════════════════════════════════════╗
-             ║  ADMOB APP ID  —  REPLACE THIS VALUE                     ║
-             ║                                                           ║
-             ║  This is NOT your banner or rewarded ad unit ID.         ║
-             ║  It is a separate App-level ID from the AdMob console.   ║
-             ║                                                           ║
-             ║  Where to find it:                                        ║
-             ║    AdMob Console → Apps → QuizAura                       ║
-             ║    → App settings → App ID                               ║
-             ║                                                           ║
-             ║  Format:  ca-app-pub-XXXXXXXXXXXXXXXX~XXXXXXXXXX         ║
-             ║           (note the TILDE ~ not slash /)                 ║
-             ║                                                           ║
-             ║  Your publisher prefix from code:                        ║
-             ║    ca-app-pub-5737850023326024                           ║
-             ║  So your App ID will look like:                          ║
-             ║    ca-app-pub-5737850023326024~XXXXXXXXXX                ║
-             ║                                                           ║
-             ║  ⚠ App CRASHES on launch if this value is wrong/missing  ║
-             ╚═══════════════════════════════════════════════════════════╝ -->
+        <!-- AdMob App ID (app-level, not an ad unit ID). Wrong/missing = crash on launch. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-5737850023326024~5042746833"/>
-        <!--                ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-                            Replace XXXXXXXXXX with your real App ID
-                            from AdMob Console → App settings        -->
 
-        <!-- ── Your two Ad Unit IDs go in Dart, NOT here ─────────────
-             Banner  ID → lib/ads/services/admob_service.dart  line 33
-                          ca-app-pub-5737850023326024/8945974038  ✅ done
-             Rewarded ID → lib/ads/services/admob_service.dart  line 38
-                           ca-app-pub-5737850023326024/2834830324 ✅ done
-        ──────────────────────────────────────────────────────────── -->
+        <!-- Ad unit IDs live in Dart:
+             Banner   -> lib/ads/widgets/banner_ad_widget.dart  (live, labelled "Advertisement")
+             Rewarded -> lib/ads/services/rewarded_ad_service.dart -->
 
-        <!-- ── FCM Background Service ──────────────────────────────────
-             Receives push notifications when the app is closed/killed.
-             Source: lib/core/services/fcm_service.dart
-        ──────────────────────────────────────────────────────────── -->
         <service
             android:name="com.google.firebase.messaging.FirebaseMessagingService"
             android:exported="false">
@@ -153,11 +87,6 @@
             </intent-filter>
         </service>
 
-        <!-- ── FileProvider — image_picker camera capture ─────────────
-             Required on Android 7+ when taking photos with the camera.
-             Source: edit_profile_screen.dart → ImageSource.camera
-             Needs: android/app/src/main/res/xml/file_paths.xml
-        ──────────────────────────────────────────────────────────── -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -167,20 +96,21 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"/>
         </provider>
-
     </application>
 
-    <!-- ═══════════════════════════════════════════════════════════════
-         QUERIES — apps this app is allowed to query/launch
-         ═══════════════════════════════════════════════════════════════ -->
     <queries>
-        <!-- Text selection actions (existing — keep) -->
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
-        <!-- in_app_purchase needs to query Play Store billing -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="mailto"/>
+        </intent>
         <package android:name="com.android.vending"/>
     </queries>
-
 </manifest>

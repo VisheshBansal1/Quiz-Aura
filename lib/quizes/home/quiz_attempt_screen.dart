@@ -167,6 +167,16 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen>
     });
   }
 
+  /// Question text lives in 'title' for normal quizzes and in 'question' for
+  /// daily / AI-generated ones. Use the first non-empty value.
+  String _questionText(Map<String, dynamic> q) {
+    for (final key in const ['title', 'question', 'text']) {
+      final v = q[key];
+      if (v is String && v.trim().isNotEmpty) return v;
+    }
+    return '';
+  }
+
   // ================= LOAD QUESTIONS =================
   Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
   _loadQuestions() async {
@@ -187,12 +197,40 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen>
 
     if (snap.docs.isEmpty) throw Exception('No questions found');
 
+    var docs = List.of(snap.docs);
+
+    if (widget.isDaily) {
+      // ── Daily quiz: timer must be the quiz's own time limit, not the
+      //    time left until the day expires ────────────────────────────────
+      final quizDoc = await FirebaseFirestore.instance
+          .collection('dailyQuizzes')
+          .doc(widget.quizId)
+          .get();
+      final quizData = quizDoc.data();
+      final limit = (quizData?['timeLimitSeconds'] as num?)?.toInt();
+      if (limit != null && limit > 0 && limit < remainingSeconds) {
+        remainingSeconds = limit;
+      }
+
+      // ── Remove duplicate questions (left over from re-publishing) ─────
+      final seen = <String>{};
+      docs = docs.where((d) {
+        final text = (d.data()['question'] ?? '').toString().trim();
+        return seen.add(text);
+      }).toList();
+
+      final expected = (quizData?['totalQuestions'] as num?)?.toInt();
+      if (expected != null && expected > 0 && docs.length > expected) {
+        docs = docs.sublist(0, expected);
+      }
+    }
+
     // ── Anti-cheat: shuffle questions using uid as seed ──────────────────
     // Same user always gets same order (prevents refresh-for-different-Qs)
     // Different users get different orders (prevents sharing answers)
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
     final seed = uid.codeUnits.fold<int>(0, (a, b) => a ^ b);
-    final shuffled = List.of(snap.docs)..shuffle(Random(seed));
+    final shuffled = docs..shuffle(Random(seed));
 
     _questions = shuffled;
 
@@ -299,6 +337,8 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen>
             .set({
               'uid': uid,
               'name': user?.displayName ?? 'User',
+              // DailyLeaderboardScreen reads `userName`; keep both fields.
+              'userName': user?.displayName ?? 'User',
               'percentage': percentage,
               'score': score,
               'timeTaken': timeTakenSeconds,
@@ -337,9 +377,14 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen>
             score: score,
             total: total,
             percentage: percentage,
-            endAt: widget.endAt,
+            // Daily quiz results are shown immediately (no wait for the day
+            // to end); scheduled quizzes keep their time-based lock.
+            endAt: widget.isDaily
+                ? DateTime.now().subtract(const Duration(seconds: 1))
+                : widget.endAt,
             passed: passed,
             passPercentage: 60.0,
+            isDaily: widget.isDaily,
           ),
         ),
       );
@@ -557,7 +602,7 @@ class _QuizAttemptScreenState extends State<QuizAttemptScreen>
                     border: Border.all(color: Colors.white.withOpacity(0.15)),
                   ),
                   child: Text(
-                    q['title'] ?? '',
+                    _questionText(q),
                     style: const TextStyle(
                       fontSize: 17,
                       color: Colors.white,

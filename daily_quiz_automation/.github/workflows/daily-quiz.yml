@@ -1,0 +1,49 @@
+name: Daily Quiz Generator
+
+# Cron is in UTC. IST = UTC+05:30, so:
+#   17:30 UTC = 11:00 PM IST  -> pre-generates TOMORROW's quiz (ready before midnight)
+#   18:15 UTC = 11:45 PM IST  -> retry if the first run failed
+#   18:45 UTC = 12:15 AM IST  -> retry (catch-up for today's quiz)
+#   01:00 UTC = 06:30 AM IST  -> final safety net
+# Every run exits immediately if the quiz already exists, so extra runs are free.
+on:
+  schedule:
+    - cron: '30 17 * * *'
+    - cron: '15 18 * * *'
+    - cron: '45 18 * * *'
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+    inputs:
+      quiz_date:
+        description: 'Optional date to generate, e.g. 2026-11-05 (default: automatic)'
+        required: false
+        default: ''
+      force:
+        description: 'Regenerate even if the quiz exists (blocked once players have submitted)'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: daily-quiz
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm install --omit=dev --no-audit --no-fund
+      - name: Generate quiz
+        run: node generate-daily-quiz.mjs
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          QUIZ_API_1_KEY: ${{ secrets.QUIZ_API_1_KEY }}
+          QUIZ_API_2_KEY: ${{ secrets.QUIZ_API_2_KEY }}
+          QUIZ_API_3_KEY: ${{ secrets.QUIZ_API_3_KEY }}
+          QUIZ_DATE: ${{ github.event.inputs.quiz_date }}
+          FORCE: ${{ github.event.inputs.force }}

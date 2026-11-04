@@ -3,6 +3,6 @@ flutter_native_splash:
   ios: true
   web: true
 
-  background_image : "assets/logo/image.png"
-  image: "assets/logo/logo.png"
-  branding: "assets/logo/image.png"
+  background_image : "assets/logo/app_logo.png"
+  image: "assets/logo/app_logo.png"
+  branding: "assets/logo/app_logo.png"

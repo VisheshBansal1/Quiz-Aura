@@ -1,30 +1,4 @@
-// ============================================================
-// FILE: lib/main.dart
-//
-// FIXES APPLIED:
-//   1. Firebase "No App [DEFAULT]" on web:
-//      index.html pre-initialises the Firebase JS SDK before Flutter
-//      boots. Dart initializeApp() safely catches 'duplicate-app'.
-//
-//   2. AuthWrapper infinite splash / 8s timeout:
-//      _authStream is nullable, initialised in initState() inside a
-//      try/catch. Synchronous throws from FirebaseAuth.instance are
-//      caught and fall through to LoginScreen immediately.
-//
-//   3. Google sign-in:
-//      Using signInWithPopup (not redirect). Requires your Google
-//      account to be added as a test user in Google Cloud Console →
-//      APIs & Services → OAuth consent screen → Test users.
-//
-//   4. AuthService crash after timeout:
-//      All Firebase fields in AuthService are `late` — they are only
-//      constructed when a login method is called, not on construction.
-//
-//   5. Named routes added:
-//      '/privacy' → PrivacyPolicyScreen
-//      '/terms'   → TermsConditionsScreen
-// ============================================================
-
+import 'package:QuizSphere/ads/services/rewarded_ad_service.dart';
 import 'package:QuizSphere/login/login_screen.dart';
 import 'package:QuizSphere/login/terms_and_condition/privacy_policy.dart';
 import 'package:QuizSphere/login/terms_and_condition/terms_condition_screen.dart';
@@ -42,18 +16,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'firebase_options.dart';
 import 'core/services/fcm_service.dart';
 import 'features/deep_links/deep_link_handler.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ── .env ──────────────────────────────────────────────────────────────────
+  // Load environment variables if needed
   try {
     await dotenv.load(fileName: '.env');
   } catch (e) {
     debugPrint('[dotenv] $e');
   }
 
-  // ── Firebase init ──────────────────────────────────────────────────────────
+  // Firebase is required before AuthWrapper starts
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -62,42 +37,54 @@ Future<void> main() async {
     debugPrint('[Firebase Init Error] $e');
   }
 
-  // ── FCM (native only) ─────────────────────────────────────────────────────
-  if (!kIsWeb) {
-    await FcmService.init().catchError((e) {
-      debugPrint('[FCM] init skipped: $e');
-      return null;
-    });
+  // Start Flutter UI immediately
+  runApp(const ProviderScope(child: QuizApp()));
+
+  // Perform non-critical initialization after UI appears
+  _initializeBackgroundServices();
+}
+
+Future<void> _initializeBackgroundServices() async {
+  // Mobile Ads
+  try {
+    // Google Play Families Policy: every ad request must be treated as
+    // child-directed and limited to G-rated content. This MUST be set
+    // BEFORE initialize() and before any ad is loaded.
+    await MobileAds.instance.updateRequestConfiguration(
+      RequestConfiguration(
+        tagForChildDirectedTreatment: TagForChildDirectedTreatment.yes,
+        tagForUnderAgeOfConsent: TagForUnderAgeOfConsent.yes,
+        maxAdContentRating: MaxAdContentRating.g,
+      ),
+    );
+    await MobileAds.instance.initialize();
+    debugPrint('========== Mobile Ads Initialized ==========');
+  } catch (e) {
+    debugPrint('[Ads Init Error] $e');
   }
 
-  // ── Deep links (native only) ──────────────────────────────────────────────
+  // FCM
   if (!kIsWeb) {
-    await DeepLinkHandler.init();
-  }
-
-  // ── Web: restore persisted auth state BEFORE painting the first frame ─────
-  // On web, authStateChanges() emits null first while Firebase reads the
-  // session from IndexedDB/localStorage.  If we call runApp() before that
-  // first emission arrives, AuthWrapper sees null → routes to LoginScreen →
-  // the 8-second timeout fires and removes the StreamBuilder from the tree →
-  // when the real User arrives later nobody is listening → user is stuck on
-  // the login page despite being authenticated.
-  //
-  // Awaiting `.first` here blocks for up to 10 s; in practice Firebase
-  // resolves in < 200 ms.  After this line, FirebaseAuth.instance.currentUser
-  // is populated and AuthWrapper's StreamBuilder will emit the correct value
-  // on its very first event.
-  if (kIsWeb) {
     try {
-      await FirebaseAuth.instance.authStateChanges().first.timeout(
-        const Duration(seconds: 10),
-      );
+      await FcmService.init();
     } catch (e) {
-      debugPrint('[Web auth restore] timed out or errored: $e');
+      debugPrint('[FCM] init skipped: $e');
     }
   }
 
-  runApp(const ProviderScope(child: QuizApp()));
+  // Deep links
+  if (!kIsWeb) {
+    try {
+      await DeepLinkHandler.init();
+    } catch (e) {
+      debugPrint('[DeepLink] init skipped: $e');
+    }
+  }
+
+  // Preload rewarded ad without blocking startup
+  if (!kIsWeb) {
+    RewardedAdService.instance.loadAd();
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

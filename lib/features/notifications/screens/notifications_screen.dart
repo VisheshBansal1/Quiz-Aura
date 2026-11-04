@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/fcm_service.dart';
 import '../../../core/widgets/glass_card.dart';
+import '../../../ads/widgets/banner_ad_widget.dart';
 
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
@@ -192,6 +193,7 @@ class NotificationsScreen extends StatelessWidget {
           ),
         ],
       ),
+      bottomNavigationBar: const BannerAdWidget(screenName: 'notifications'),
     );
   }
 

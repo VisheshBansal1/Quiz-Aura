@@ -17,6 +17,12 @@ class FirestorePaths {
   static const String collegeMembers    = 'members';
   static const String battles           = 'battles';
   static const String battleScores      = 'scores';
+
+  // ── 1v1 Battle (server-authoritative; clients are read-only) ──────────────
+  static const String battleMatches     = 'battleMatches';
+  static const String battlePlayers     = 'battlePlayers';
+  static const String battleInvites     = 'battleInvites';
+  static const String battleStats       = 'battleStats';
   static const String tournaments       = 'tournaments';
   static const String tournamentRounds  = 'rounds';
   static const String tournamentPlayers = 'participants';
